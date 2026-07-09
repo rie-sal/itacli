@@ -186,10 +186,13 @@ places a generative model is permitted.
 ------------------------------------------------------------------------------
 10. WORD CAPTURE - GLOBAL HOTKEY
 ------------------------------------------------------------------------------
-    - Single global hotkey works across ALL apps (Discord/WhatsApp included)
-      by simulating copy and reading the clipboard.
-    - Pipeline: capture text -> spaCy chunks it (tokens, lemmas, noun-
-      chunks) -> mint a card per content word/chunk.
+    - ONE global hotkey triggers the ENTIRE pipeline, always, in ALL apps
+      (Discord/WhatsApp included), by simulating copy and reading the
+      clipboard. This is the vital, do-everything trigger; the native OS
+      popup (below) never replaces it.
+    - Pipeline (all on that single shortcut): capture text -> translate/show
+      -> spaCy chunks it (tokens, lemmas, noun-chunks) -> mint a card per
+      content word/chunk -> dedupe -> smart-save relevant cards to Anki.
     - Translation engine (no LLM): dictionary gloss per word + local neural
       MT (Apple on-device via Shortcuts "Translate Text", or OPUS-MT /
       Argos Translate) per phrase.
