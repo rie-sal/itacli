@@ -1,11 +1,18 @@
 """Terminal rendering. Horizontal, minimal rules, roomy, shifted right,
-justified, wide (SPECS §6). Pure stdlib so it runs with zero installs.
+fully justified within a fixed measure (SPECS §6). Pure stdlib.
+
+Layout contract:
+  - INDENT shifts the whole block right (a left margin).
+  - WIDTH is the measure; NOTHING prints past it (a hard right margin).
+  - Data rows are fully justified: a fixed label column on the left, then the
+    row's items distributed so the last item lands flush on the right margin.
 """
 import os
 
-INDENT = "     "          # shift the block toward the right
-WIDTH = 70               # content width (also the length of the rules)
-BAR_WIDTH = 30           # proficiency thermometer length
+INDENT = "     "   # left margin
+WIDTH = 72         # the measure (also the length of every rule)
+LABEL_W = 12       # label column; row content starts here
+BAR_WIDTH = 30     # proficiency thermometer length
 
 
 def clear():
@@ -20,12 +27,34 @@ def line(text=""):
     print(INDENT + text)
 
 
-def justified(left, right):
-    """Left label, right value, filling the full content width."""
+def blank():
+    print()
+
+
+def two_sided(left, right):
+    """Label flush left, value flush right, filling the measure."""
     pad = WIDTH - len(left) - len(right)
-    if pad < 1:
-        pad = 1
-    print(INDENT + left + " " * pad + right)
+    print(INDENT + left + " " * max(1, pad) + right)
+
+
+def justify_row(label, items):
+    """Fixed label column, then items distributed to fill to the right margin."""
+    head = label.ljust(LABEL_W)
+    area = WIDTH - LABEL_W
+    if len(items) <= 1:
+        print(INDENT + head + (items[0] if items else ""))
+        return
+    total = sum(len(i) for i in items)
+    gaps = len(items) - 1
+    space = area - total
+    if space < gaps:                      # too tight to justify; single-space it
+        print(INDENT + head + " ".join(items))
+        return
+    base, extra = divmod(space, gaps)
+    out = items[0]
+    for i, it in enumerate(items[1:]):
+        out += " " * (base + (1 if i < extra else 0)) + it
+    print(INDENT + head + out)
 
 
 def bar(fraction):
@@ -33,30 +62,25 @@ def bar(fraction):
     return "|" + "#" * filled + "-" * (BAR_WIDTH - filled) + "|"
 
 
-def blank():
-    print()
-
-
 def home(data):
     clear()
     blank()
-    justified("ITACLI · Italian", "Day %d" % data["day"])
+    two_sided("ITACLI · Italian", "Day %d" % data["day"])
     blank()
     rule()
     blank()
-    justified("CEFR level", "%s   (assessed %s)" % (data["cefr_level"], data["cefr_assessed_ago"]))
+    two_sided("CEFR level", "%s   (assessed %s)"
+              % (data["cefr_level"], data["cefr_assessed_ago"]))
     blank()
     pct = int(round(data["prof_fraction"] * 100))
-    justified("Proficiency    " + bar(data["prof_fraction"]),
+    two_sided("Proficiency".ljust(LABEL_W) + bar(data["prof_fraction"]),
               "%d%% toward %s" % (pct, data["prof_next_band"]))
     blank()
-    skills = "     ".join("%s %s" % (k, v) for k, v in data["skills"].items())
-    line("Skills         " + skills)
+    justify_row("Skills", ["%s %s" % kv for kv in data["skills"].items()])
     blank()
-    line("Focus          " + "   ·   ".join(data["focus"]))
+    justify_row("Focus", data["focus"])
     blank()
-    plan = "    ".join("%s %d min" % (name, mins) for name, mins in data["plan"])
-    line("Plan           " + plan)
+    justify_row("Plan", ["%s %d min" % p for p in data["plan"]])
     blank()
     rule()
     blank()
@@ -71,7 +95,6 @@ def home(data):
 
 
 def panel(title, body_lines, footer="press Enter to return"):
-    """A simple stub screen used by every not-yet-built pillar."""
     clear()
     blank()
     line(title)

@@ -1,25 +1,83 @@
-"""Anki bridge (SPECS §4, §7-vocab). Stub.
+"""Anki bridge (SPECS §4, §7-vocab).
 
-All cards live in Anki. Two directions:
-  - push: create notes (quick-add command; capture pipeline; reading queue).
-  - pull: read review stats (retention, intervals, lapses, ease) to feed the
-    Proficiency score.
+All cards live in Anki. This talks to the AnkiConnect add-on over HTTP using
+only the standard library (no pip install). AnkiConnect must be installed in
+Anki (add-on code 2055492159) and Anki must be running.
 
-Reachable via the AnkiConnect add-on over HTTP (localhost:8765, requires Anki
-running) and/or the collection.anki2 SQLite DB. Getting deeply informed on
-Anki internals is an explicit early task.
+  push: add_card()  -> create a Basic note
+  pull: review_stats() -> per-card review history (feeds the Proficiency score)
 """
+import json
+import urllib.error
+import urllib.request
 
-ANKICONNECT_URL = "http://127.0.0.1:8765"
+from . import db
+
+TIMEOUT = 4  # seconds
 
 
-def add_card(front, back, deck="itacli", tags=("itacli",)):
-    """Create a single note. Backs the quick-add command and capture."""
-    # TODO: POST addNote to AnkiConnect.
-    raise NotImplementedError
+class AnkiUnavailable(RuntimeError):
+    """Raised when Anki / AnkiConnect can't be reached."""
 
 
-def review_stats():
-    """Pull per-card review history for the Proficiency score."""
-    # TODO: query AnkiConnect / collection DB.
-    raise NotImplementedError
+def _endpoint():
+    return db.get_setting("ankiconnect_url", "http://127.0.0.1:8765")
+
+
+def _invoke(action, **params):
+    payload = json.dumps({"action": action, "version": 6, "params": params}).encode()
+    req = urllib.request.Request(
+        _endpoint(), data=payload, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            body = json.loads(resp.read().decode())
+    except (urllib.error.URLError, OSError) as e:
+        raise AnkiUnavailable(
+            "Could not reach AnkiConnect at %s. Is Anki open with the "
+            "AnkiConnect add-on installed?" % _endpoint()
+        ) from e
+    if body.get("error"):
+        raise RuntimeError("AnkiConnect error: %s" % body["error"])
+    return body.get("result")
+
+
+def is_available():
+    try:
+        _invoke("version")
+        return True
+    except (AnkiUnavailable, RuntimeError):
+        return False
+
+
+def ensure_deck(deck):
+    _invoke("createDeck", deck=deck)
+
+
+def add_card(front, back="", deck=None, tags=("itacli",)):
+    """Create a Basic note. Returns the new note id.
+
+    Duplicates are allowed to fail softly (returns None) so the capture
+    pipeline can keep going.
+    """
+    deck = deck or db.get_setting("anki_deck", "itacli")
+    ensure_deck(deck)
+    note = {
+        "deckName": deck,
+        "modelName": "Basic",
+        "fields": {"Front": front, "Back": back},
+        "tags": list(tags),
+        "options": {"allowDuplicate": False},
+    }
+    try:
+        return _invoke("addNote", note=note)
+    except RuntimeError:
+        return None  # duplicate or model issue; caller can inspect separately
+
+
+def review_stats(query="tag:itacli"):
+    """Return per-card review info for the Proficiency score. Best-effort."""
+    card_ids = _invoke("findCards", query=query)
+    if not card_ids:
+        return []
+    return _invoke("cardsInfo", cards=card_ids)

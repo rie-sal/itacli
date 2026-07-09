@@ -80,6 +80,9 @@ DEFAULT_SETTINGS = {
     "interests": "",                # comma-separated, drives subreddit search
     "study_minutes_total": "0",
     "day_count": "1",
+    "capture_hotkey": "<cmd>+<shift>+i",   # the single do-everything shortcut
+    "translate_shortcut": "",              # optional macOS Shortcut name for glosses
+    "anki_deck": "itacli",
 }
 
 
@@ -108,5 +111,18 @@ def get_setting(key, default=None):
     try:
         row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
         return row["value"] if row else default
+    finally:
+        conn.close()
+
+
+def set_setting(key, value):
+    conn = connect()
+    try:
+        conn.execute(
+            "INSERT INTO settings(key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, str(value)),
+        )
+        conn.commit()
     finally:
         conn.close()

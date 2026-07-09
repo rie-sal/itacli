@@ -16,13 +16,8 @@ def daily():
 
 
 def reading():
-    ui.panel("Reading", [
-        "Read public-domain literature, Wikisource, and native-speaker",
-        "subreddits chosen from your interests. Highlight unknown words to",
-        "save them; comprehension via supplied questions or auto cloze.",
-        "",
-        "Build step 1 (the spine): Reading + highlight -> Anki.",
-    ])
+    from . import reading as reading_pillar
+    reading_pillar.open_reading()
 
 
 def grammar():
@@ -86,10 +81,43 @@ def library():
 
 
 def settings():
-    ui.panel("Settings", [
-        "Daily time budget, activity ratio (auto or manual), goals and",
-        "interests (which drive subreddit selection), Anki connection,",
-        "dictionary / translation engine, and LLM API key for opt-in features.",
-        "",
-        "Build step: expanded as options appear.",
-    ])
+    from . import db, anki
+    while True:
+        ui.clear()
+        ui.blank()
+        ui.line("Settings")
+        ui.blank()
+        ui.rule()
+        ui.blank()
+        ui.two_sided("1  Capture hotkey", db.get_setting("capture_hotkey"))
+        ui.two_sided("2  Translate Shortcut (macOS)",
+                     db.get_setting("translate_shortcut") or "(none)")
+        ui.two_sided("3  Interests (for subreddits)",
+                     db.get_setting("interests") or "(none)")
+        ui.two_sided("4  Anki deck", db.get_setting("anki_deck"))
+        ui.two_sided("   Anki status", "connected" if anki.is_available() else "offline")
+        ui.blank()
+        ui.line("Enter a number to change it, q to go back.")
+        ui.blank()
+        ui.rule()
+        ui.blank()
+        try:
+            choice = input(ui.INDENT + "> ").strip().lower()
+        except EOFError:
+            return
+        if choice in ("q", ""):
+            return
+        prompts = {
+            "1": ("capture_hotkey",
+                  "Hotkey (pynput format, e.g. <cmd>+<shift>+i): "),
+            "2": ("translate_shortcut", "macOS Shortcut name (blank to disable): "),
+            "3": ("interests", "Interests, comma-separated: "),
+            "4": ("anki_deck", "Anki deck name: "),
+        }
+        if choice in prompts:
+            key, prompt = prompts[choice]
+            try:
+                val = input(ui.INDENT + prompt).strip()
+            except EOFError:
+                return
+            db.set_setting(key, val)

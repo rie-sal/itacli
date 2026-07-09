@@ -230,11 +230,17 @@ places a generative model is permitted.
 ------------------------------------------------------------------------------
 13. BUILD SEQUENCE
 ------------------------------------------------------------------------------
-    0. Scaffold: runnable app, all nine menus navigable, full SQLite schema,
-       git initialized, pillars stubbed. (Launch it on day one.)
-    1. Reading + highlight -> Anki (the spine).
+    0. [DONE] Scaffold: runnable app, nine navigable menus, full SQLite
+       schema, git initialized, pillars stubbed.
+    1. [IN PROGRESS] Reading + highlight -> Anki (the spine).
+       Done: Gutenberg fetch (stdlib) + bundled offline excerpt; passage
+       reader with position memory; type-to-save words -> vocab + Anki.
+       Also done early (per request): Anki bridge (AnkiConnect over stdlib
+       urllib) and the single-hotkey capture pipeline with a user-selectable
+       shortcut (Settings). Next: cloze comprehension; real click-drag
+       highlight (with the Textual UI upgrade); Reddit/Wikisource sources.
     2. Grammar (most deterministic, high value).
-    3. Vocab/Anki bridge + beta Proficiency score.
+    3. Vocab/Anki bridge [bridge DONE] + beta Proficiency score.
     4. CEFR / DIALANG-style assessment.
     5. Listening (hardest, last).
     NOTE: "build everything at once" and "test ASAP" conflict; scaffold-all
