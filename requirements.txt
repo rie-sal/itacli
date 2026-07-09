@@ -1,0 +1,26 @@
+# The scaffold runs on the Python standard library alone (no install needed).
+# These are the dependencies each pillar will pull in as it is built:
+
+# --- Reading / NLP (Tier 1) ---
+# spacy                 # tokenize, lemmatize, POS, chunking, cloze
+# it-core-news-lg       # Italian model (spacy download)
+
+# --- Content sourcing ---
+# requests
+# beautifulsoup4        # scrape Gutenberg / Wikisource / grammar sites
+# praw                  # Reddit API
+# yt-dlp                # video + transcripts (listening)
+
+# --- Language detection (native-speaker sub filtering) ---
+# fasttext / langid
+
+# --- Difficulty / CEFR tagging (Tier 2 encoder model) ---
+# transformers
+# torch
+
+# --- Anki bridge ---
+# genanki               # generate .apkg
+# (AnkiConnect is an Anki add-on reached over HTTP; no pip package needed)
+
+# --- Terminal UI (optional upgrade from stdlib) ---
+# rich / textual

@@ -1,0 +1,248 @@
+==============================================================================
+ITACLI - REQUIREMENTS & SPECIFICATION
+==============================================================================
+A terminal-first, structured language-learning tool. Personal use, Italian
+first; the name stays even as more languages are added later.
+
+Living document. Last updated during design conversation (2026-07-09).
+Sections marked [OPEN] are undecided. Sections marked [LLM] name the only
+places a generative model is permitted.
+
+------------------------------------------------------------------------------
+1. VISION
+------------------------------------------------------------------------------
+    A tool that stores a curated set of useful sources in a local database,
+    scrapes them for content, and delivers everything through one structured
+    terminal interface. Less gamified and more rigorous than Duolingo.
+    Grammar-heavy. Content-driven. The user is assumed self-motivated; the
+    app never nags. When content runs low, the app scrapes for more.
+
+------------------------------------------------------------------------------
+2. DESIGN PRINCIPLES
+------------------------------------------------------------------------------
+    - Deterministic by default. Scripting and closed-form, auto-gradeable
+      items are the norm. Any reliance on AI must be flagged and bounded.
+    - Lightweight above all. Terminal is home base. No Electron. Pop-ups
+      (or external players) only when a feature truly cannot live in text.
+    - Everything lives as real files on the user's machine, git-tracked,
+      pushable to GitHub.
+    - Multi-language ready in structure, single-language (Italian) in scope.
+
+------------------------------------------------------------------------------
+3. INTELLIGENCE TIERS (cheapest first)
+------------------------------------------------------------------------------
+    Tier 1  Rule-based + spaCy (it_core_news_lg)
+                Tokenization, lemmatization, POS/morphology, dependency
+                parse, noun-chunking. Powers cloze generation, grammar-
+                concept tagging, vocab dedupe, sentence chunking. Local,
+                free, deterministic.
+    Tier 2  Small encoder models (AlBERTo / BERT-based CEFR classifiers)
+                Auto-tag scraped passages with difficulty/CEFR level;
+                language detection. Local inference, no API.
+    Tier 3  Generative LLM  [LLM] - permitted ONLY at:
+                (a) comprehension questions on raw text with no supplied
+                    questions and where cloze is insufficient,
+                (b) "explain this word in context" on demand,
+                (c) fuzzy flashcard selection beyond frequency + history.
+
+------------------------------------------------------------------------------
+4. COMPONENTS
+------------------------------------------------------------------------------
+    - Content database (SQLite): the single structured source.
+    - Scraper modules: one per source type, normalizing into content_items.
+      Run on demand or automatically when unused content runs low.
+    - Adaptive engine (deterministic): picks the daily mix from weakest
+      concepts x available time budget.
+    - Proficiency model (deterministic): combines exercise results + Anki
+      retention into a continuous score. See section 8.
+    - CEFR assessment engine: periodic, spaced by time studied. See sec. 9.
+    - Anki bridge: push cards; pull review stats (retention, intervals,
+      lapses, ease). Requires understanding Anki internals (collection
+      SQLite DB + AnkiConnect add-on API).
+    - Word-capture daemon: global hotkey clipboard capture. See section 10.
+
+------------------------------------------------------------------------------
+5. DATA MODEL (initial sketch)
+------------------------------------------------------------------------------
+    sources           url, type, language, license, last_scraped
+    content_items     type (passage|video|grammar_drill|cefr_item),
+                      skill, cefr_level, topic, difficulty, body,
+                      answer_key, source_id, consumed
+    vocab             term, lemma, gloss, source_context, status,
+                      anki_note_id, added_from
+    attempts          content_item_id, correct, timestamp, concept_tags
+    proficiency_state per-skill and per-grammar-concept running estimates
+    assessments       timestamp, study_minutes_at_time, per-skill CEFR,
+                      overall CEFR, item_ids_used
+    settings          time_budget, activity_ratio_mode, goals/interests,
+                      anki_config, dictionary/MT config, api_key
+
+------------------------------------------------------------------------------
+6. INTERFACE
+------------------------------------------------------------------------------
+    Terminal-first. Horizontal, minimal vertical rules, roomy spacing,
+    block shifted toward the right, wide layout, justified text, few
+    abbreviations. Two distinct scores shown: CEFR (from assessments) and
+    Proficiency (from Anki + exercises). Home screen mock:
+
+              ITACLI - Italian                                    Day 12
+
+     ----------------------------------------------------------------------
+
+     CEFR level                B1            last assessed: 3.5 study-hours ago
+
+     Proficiency  |###############-----------|   68 percent toward B2
+
+     Skills     Reading B1     Listening A2     Grammar B1     Vocabulary B1
+
+     Focus      Listening   -   Congiuntivo   -   Prepositions
+
+     Plan       Grammar 12 min    Reading 8 min    Listening 6 min    Vocab 4 min
+
+     ----------------------------------------------------------------------
+
+     1  Daily session                        6  Assessment and CEFR
+
+     2  Reading                              7  Progress and statistics
+
+     3  Grammar                              8  Content library
+
+     4  Vocabulary via Anki                  9  Settings
+
+     5  Listening                            q  Quit
+
+     ----------------------------------------------------------------------
+
+     >
+
+    Pop-up / external only for: listening (mpv or browser with synced
+    transcript in terminal) and the word-capture translation panel.
+
+------------------------------------------------------------------------------
+7. PILLARS
+------------------------------------------------------------------------------
+    READING
+        - Sources: Project Gutenberg, LiberLiber/Progetto Manuzio,
+          Wikisource, Reddit (native-speaker subs), graded readers.
+        - Read passage in terminal; highlight unknown words -> saved to
+          vocab queue.
+        - Word lookup: dictionary gloss (deterministic) + optional
+          "explain in context" [LLM].
+        - Comprehension: prefer supplied questions; otherwise cloze
+          deletion (spaCy blanks target words, auto-graded). [LLM] questions
+          only as opt-in on raw text.
+    GRAMMAR (heavy emphasis, most deterministic pillar)
+        - Scraped lessons + exercises (fill-in-blank, conjugation,
+          multiple-choice, transformation) with answer keys.
+        - Real textbook content preferred (a purchased textbook the user
+          digitizes for themselves is acceptable); LLM-generated against a
+          CEFR grammar map as fallback. [OPEN] which textbooks/sites.
+        - Concept-level mastery tracking feeds the adaptive engine.
+    VOCABULARY (Anki)
+        - ALL cards live in Anki. The app pushes cards and reads stats.
+        - Quick-add command creates a card instantly, no GUI:
+              add "magari" "maybe / if only"
+        - User-made cards otherwise just live in Anki; no special handling.
+        - Slang emerges naturally from Reddit highlights; no dedicated
+          slang feature.
+    LISTENING (hardest; built last)
+        - Sources: native-speaker YouTube + public-domain film. Transcript
+          required (yt-dlp; prefer manual captions over auto).
+        - Launches mpv (or browser) with transcript synced in terminal.
+        - Check: transcript cloze / timestamp comprehension. [LLM] Qs opt-in.
+        - [OPEN] exact evaluation structure.
+
+------------------------------------------------------------------------------
+8. SCORING - PROFICIENCY (continuous, always-on)
+------------------------------------------------------------------------------
+    - Independent from the CEFR score. Updates continuously.
+    - Inputs: exercise results (weighted by item CEFR difficulty x
+      correctness) + Anki retention/intervals/lapses.
+    - Represented as a continuous number (band + fraction, e.g. B1 + 0.68),
+      rendered as the progress thermometer toward the next band.
+    - Fully deterministic; the thermometer graphic is pure rendering of the
+      fraction. No AI in the score or the graphic. (AI touches only the
+      difficulty-tagging of unlabeled content - Tier 2.)
+    - Ship a crude "beta" version as soon as the Anki bridge returns any
+      stats, so a number appears from day one; refine the formula over time.
+
+------------------------------------------------------------------------------
+9. CEFR ASSESSMENT (periodic, discrete)
+------------------------------------------------------------------------------
+    - Separate score from Proficiency. Updates only at assessments.
+    - The main motivator; assessment and score sit on the home screen and
+      the app keeps returning the user to it.
+    - Cadence: spaced by TIME STUDIED, not calendar days in the app.
+      [OPEN] exact threshold (e.g. every N study-hours of completed work).
+    - Closed-form, auto-graded, no speaking. Directional but as close to
+      formal as feasible. Reference model: DIALANG (CEFR-calibrated
+      diagnostic; reading, listening, grammar, vocab).
+    - May reuse questions drawn from the exercise pool.
+    - [OPEN] exact structure of CEFR questions.
+    - FUTURE: add a writing assessment to the CEFR battery.
+    - Difficulty-tagging of content: Tier 2 encoder model when a source
+      carries no CEFR label.
+
+------------------------------------------------------------------------------
+10. WORD CAPTURE - GLOBAL HOTKEY
+------------------------------------------------------------------------------
+    - Single global hotkey works across ALL apps (Discord/WhatsApp included)
+      by simulating copy and reading the clipboard.
+    - Pipeline: capture text -> spaCy chunks it (tokens, lemmas, noun-
+      chunks) -> mint a card per content word/chunk.
+    - Translation engine (no LLM): dictionary gloss per word + local neural
+      MT (Apple on-device via Shortcuts "Translate Text", or OPUS-MT /
+      Argos Translate) per phrase.
+    - Native macOS Translate popup: used where the OS exposes it (Safari,
+      Notes, etc.). It CANNOT be forced over apps that don't register the
+      text service (Discord/WhatsApp) - there we fall back to Apple's
+      on-device engine shown in a minimal native-looking panel.
+    - Anti-flood: dedupe candidates against existing Anki notes + a
+      frequency threshold; optional 1-second confirm/trim list.
+    - Within the terminal reader we own selection directly, so highlight ->
+      save is exact there.
+
+------------------------------------------------------------------------------
+11. CONTENT SOURCING NOTES
+------------------------------------------------------------------------------
+    - Reddit: find native-speaker subs by the user's stated interests.
+      Search Italian subs matching interests, then language-detect a sample
+      and keep only subs that are predominantly Italian (heuristic, not a
+      guarantee). Exclude learner subs (r/italian, r/italianlearning).
+    - Licensing: scraping copyrighted textbooks/exam prep is a legal gray
+      area even for personal use. Prefer public-domain and open sources;
+      a self-digitized purchased textbook is the cleanest textbook route.
+    - CEFR items: no single open archive of official items (boards CILS,
+      CELI, PLIDA guard them). Curate a CEFR-tagged bank from open/practice
+      sources + DIALANG-style items.
+
+------------------------------------------------------------------------------
+12. TECH STACK (proposed, to confirm)
+------------------------------------------------------------------------------
+    Python; SQLite; Textual or Rich (TUI); spaCy it_core_news_lg;
+    yt-dlp; mpv; AnkiConnect / genanki; local MT (Apple Shortcuts or
+    OPUS-MT/Argos); a global-hotkey daemon (Hammerspoon or a small
+    pynput/Quartz helper, needs Accessibility permission).
+
+------------------------------------------------------------------------------
+13. BUILD SEQUENCE
+------------------------------------------------------------------------------
+    0. Scaffold: runnable app, all nine menus navigable, full SQLite schema,
+       git initialized, pillars stubbed. (Launch it on day one.)
+    1. Reading + highlight -> Anki (the spine).
+    2. Grammar (most deterministic, high value).
+    3. Vocab/Anki bridge + beta Proficiency score.
+    4. CEFR / DIALANG-style assessment.
+    5. Listening (hardest, last).
+    NOTE: "build everything at once" and "test ASAP" conflict; scaffold-all
+    then fill-incrementally satisfies both.
+
+------------------------------------------------------------------------------
+14. OPEN QUESTIONS
+------------------------------------------------------------------------------
+    - Which grammar textbooks/sites.
+    - Exact CEFR question structure.
+    - CEFR cadence threshold (study-hours between assessments).
+    - Listening evaluation structure.
+    - Default daily time budget and how the adaptive ratio is computed.
+==============================================================================

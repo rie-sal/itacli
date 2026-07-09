@@ -1,0 +1,10 @@
+# itacli
+*.db
+*.db-journal
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+*.apkg
+content_cache/
