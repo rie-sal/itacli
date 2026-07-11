@@ -8,6 +8,22 @@ itacli is a Python app. Your **code** and your **data** are separate:
 So to test as a brand-new user without touching a development copy, put the
 code in a new folder **and** point it at a fresh data dir.
 
+## Easiest: one command
+
+Paste into Terminal — clones and installs everything, then tells you how to run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rie-sal/itacli/main/bootstrap.sh | bash
+```
+
+## Easiest without typing: double-click
+
+Download **`itacli-install.command`** from the repo and double-click it in
+Finder. The first time, macOS Gatekeeper may block it — right-click the file →
+**Open** → **Open** to confirm you trust it. It installs to `~/itacli`.
+
+The manual steps below are the same thing, spelled out.
+
 ## 1. Get the code
 
 ```bash

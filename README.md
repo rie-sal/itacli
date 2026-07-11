@@ -45,5 +45,19 @@ video genuinely insists.
 
 ---
 
+**install** (macOS)
+
+One command — paste it into Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rie-sal/itacli/main/bootstrap.sh | bash
+```
+
+Prefer not to type? Download **`itacli-install.command`** from this repo and
+double-click it (right-click → Open the first time). Full details in
+[INSTALL.md](INSTALL.md).
+
+---
+
 *Built slowly, on purpose. Buon studio.*
 
