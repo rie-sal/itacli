@@ -84,9 +84,18 @@ def reddit_posts(subreddit, limit=10, min_italian=0.20):
     return posts
 
 
+def wikipedia_text(title, lang="it"):
+    """Plain-text extract of a Wikipedia article via the MediaWiki API."""
+    return _mediawiki_extract("https://%s.wikipedia.org/w/api.php?" % lang, title)
+
+
 def wikisource_text(title, lang="it"):
     """Plain-text extract of a Wikisource page via the MediaWiki API."""
-    api = "https://%s.wikisource.org/w/api.php?" % lang
+    return _mediawiki_extract("https://%s.wikisource.org/w/api.php?" % lang, title)
+
+
+def _mediawiki_extract(api, title):
+    api_base = api
     params = {
         "action": "query", "prop": "extracts", "explaintext": "1",
         "titles": title, "format": "json", "redirects": "1",

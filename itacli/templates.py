@@ -63,10 +63,35 @@ def _plural(item):
     }
 
 
+_PERSONS = [("1s", "io"), ("2s", "tu"), ("3s", "lui/lei"),
+            ("1p", "noi"), ("2p", "voi"), ("3p", "loro")]
+
+
+def _is_verb(item):
+    return item.get("pos") == "verb"
+
+
+def _present_tense(item):
+    lemma = (item.get("lemma") or item["term"]).lower()
+    if not lemma.endswith(("are", "ere", "ire")):
+        return None
+    person, label = _PERSONS[len(lemma) % len(_PERSONS)]   # vary by word, deterministic
+    form = morph.conjugate(lemma, person=person)
+    if not form:
+        return None
+    return {
+        "prompt": "Present tense - conjugate:   %s ___   (%s)" % (label, lemma),
+        "answer": form,
+        "note": "Present indicative, %s of %s." % (label, lemma),
+        "concept": "present-tense",
+    }
+
+
 TEMPLATES = [
     Template("def-art", "Definite articles", "A1", _is_noun_with_gender, _definite_article),
     Template("indef-art", "Indefinite articles", "A1", _is_noun_with_gender, _indefinite_article),
     Template("plural", "Noun plurals", "A1", _is_noun_with_gender, _plural),
+    Template("present", "Present tense", "A1", _is_verb, _present_tense),
 ]
 
 

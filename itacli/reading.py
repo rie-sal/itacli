@@ -98,14 +98,14 @@ def save_word(term, context):
     gloss = capture.translate(term)
     note_id = anki.add_card(term, gloss) if anki.is_available() else None
     from . import morph
-    pos, gender = morph.guess_features(term)
+    pos, gender, lemma = morph.analyze(term)
     conn = db.connect()
     try:
         conn.execute(
             "INSERT INTO vocab(term, gloss, source_context, status, "
-            "anki_note_id, added_from, pos, gender) "
-            "VALUES (?, ?, ?, 'new', ?, 'reading', ?, ?)",
-            (term, gloss, context, note_id, pos, gender),
+            "anki_note_id, added_from, pos, gender, lemma) "
+            "VALUES (?, ?, ?, 'new', ?, 'reading', ?, ?, ?)",
+            (term, gloss, context, note_id, pos, gender, lemma),
         )
         conn.commit()
     finally:
@@ -227,21 +227,30 @@ def _read_book(book):
         ui.panel("Reading", ["You reached the end of this text. Complimenti!"])
 
 
-def _read_wikisource():
-    from . import sources
+def _read_mediawiki(kind, fetch):
     try:
-        title = input(ui.INDENT + "Wikisource title (e.g. Pinocchio): ").strip()
+        title = input(ui.INDENT + "%s title (e.g. Pinocchio): " % kind).strip()
     except EOFError:
         return
     if not title:
         return
     try:
-        text = sources.wikisource_text(title)
+        text = fetch(title)
     except RuntimeError as e:
-        ui.panel("Wikisource", [str(e)])
+        ui.panel(kind, [str(e)])
         return
-    _read_book({"id": "wikisource:%s" % title, "title": title,
-                "author": "Wikisource", "text": text})
+    _read_book({"id": "%s:%s" % (kind.lower(), title), "title": title,
+                "author": kind, "text": text})
+
+
+def _read_wikisource():
+    from . import sources
+    _read_mediawiki("Wikisource", sources.wikisource_text)
+
+
+def _read_wikipedia():
+    from . import sources
+    _read_mediawiki("Wikipedia", sources.wikipedia_text)
 
 
 def _read_reddit():
@@ -288,6 +297,7 @@ def open_reading():
             ui.line("%d  %s - %s  (Gutenberg #%s)" % (i, b["title"], b["author"], b["id"]))
         ui.line("g  Enter any Project Gutenberg ID")
         ui.line("w  Wikisource (enter a title)")
+        ui.line("p  Wikipedia (enter a title)")
         ui.line("r  Reddit (native-speaker threads)")
         ui.line("q  Back to menu")
         ui.blank()
@@ -310,6 +320,8 @@ def open_reading():
                 _read_book({"id": bid, "title": "Gutenberg #%s" % bid, "author": ""})
         elif choice == "w":
             _read_wikisource()
+        elif choice == "p":
+            _read_wikipedia()
         elif choice == "r":
             _read_reddit()
         elif choice.isdigit() and 1 <= int(choice) <= len(CURATED):

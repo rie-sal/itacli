@@ -78,35 +78,71 @@ def pluralize(noun, gender):
     return None
 
 
-# --- optional richer backend (verbs); inactive until mlconjug3 is installed ---
+# --- spaCy analyzer (tagging) + mlconjug3 conjugator (verbs) ----------------
+# Both load lazily and cache; if unavailable, we fall back to the heuristic /
+# skip verb exercises, so the app still runs on plain stdlib Python.
 
-def conjugate(infinitive, tense="indicative present", person=0):
-    """Conjugate via mlconjug3 if available, else None (so verb templates stay
-    off rather than risk an irregular form)."""
+_NLP = None
+_CONJ = None
+SPACY_MODEL = "it_core_news_md"
+_POS_MAP = {"NOUN": "noun", "PROPN": "noun", "VERB": "verb", "AUX": "verb",
+            "ADJ": "adj", "ADV": "adv"}
+
+
+def _nlp():
+    global _NLP
+    if _NLP is None:
+        try:
+            import spacy
+            _NLP = spacy.load(SPACY_MODEL)
+        except Exception:
+            _NLP = False
+    return _NLP or None
+
+
+def analyze(word):
+    """Return (pos, gender, lemma) using spaCy when available, else heuristic."""
+    nlp = _nlp()
+    if nlp and word:
+        toks = [t for t in nlp(word) if t.is_alpha]
+        if toks:
+            t = toks[0]
+            pos = _POS_MAP.get(t.pos_)
+            g = t.morph.get("Gender")
+            gender = {"Masc": "m", "Fem": "f"}.get(g[0]) if g else None
+            return pos, gender, t.lemma_.lower()
+    pos, gender = guess_features(word)
+    return pos, gender, (word or "").strip().lower()
+
+
+def _conjugator():
+    global _CONJ
+    if _CONJ is None:
+        try:
+            import warnings
+            warnings.filterwarnings("ignore")
+            import mlconjug3
+            _CONJ = mlconjug3.Conjugator(language="it")
+        except Exception:
+            _CONJ = False
+    return _CONJ or None
+
+
+def conjugate(infinitive, person="1s", mood="Indicativo", tense="Indicativo presente"):
+    """Conjugate a verb via mlconjug3, or None if unavailable/unknown.
+
+    person: one of 1s 2s 3s 1p 2p 3p. Returns None rather than risk a guess.
+    """
+    conj = _conjugator()
+    if not conj or not infinitive:
+        return None
     try:
-        import mlconjug3
-        conj = mlconjug3.Conjugator(language="it")
-        verb = conj.conjugate(infinitive)
-        forms = verb.iterate()  # list of (mood, tense, person, form)
-        for mood_t, tns, per, form in forms:
-            if tns.lower() == tense.split()[-1] and form:
-                return form
+        info = conj.conjugate(infinitive).conjug_info.get(mood, {}).get(tense, {})
+        return info.get(person) or None
     except Exception:
         return None
-    return None
 
 
 def backend_status():
-    """What morphology backends are available, for diagnostics."""
-    status = {"builtin": True, "mlconjug3": False, "morph_it": False, "spacy": False}
-    try:
-        import mlconjug3  # noqa: F401
-        status["mlconjug3"] = True
-    except Exception:
-        pass
-    try:
-        import spacy  # noqa: F401
-        status["spacy"] = True
-    except Exception:
-        pass
-    return status
+    return {"builtin": True, "spacy": _nlp() is not None,
+            "mlconjug3": _conjugator() is not None}

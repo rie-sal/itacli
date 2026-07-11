@@ -18,7 +18,7 @@ import subprocess
 import sys
 import uuid
 
-from . import db, hotkeys, paths
+from . import db, hotkeys, paths, ui
 
 QUICK_ACTION = "itacli capture.workflow"
 
@@ -179,8 +179,38 @@ def _is_macos():
     return sys.platform == "darwin"
 
 
-def run_setup(out=print, input_fn=input, open_apps=True):
-    """Prepare artifacts, show synchronized status, and open the right apps."""
+def language_pack_walkthrough(out=print, input_fn=input, open_apps=None):
+    """Walk the user through downloading Apple's offline language pack, and
+    open the Translate app for them. (Assumes a recent macOS.)"""
+    for line in [
+        "Offline translation - download the language pack",
+        "",
+        "Apple's translator runs on-device once a language is downloaded, so",
+        "your capture glosses then work with Wi-Fi off. One-time step:",
+        "",
+        "1. The Translate app opens.",
+        "2. Set the two language buttons at the top to Italian and English.",
+        "3. Translate any word once (type 'ciao') while online - macOS then",
+        "   downloads and caches the on-device model.",
+        "   Or: Translate menu (top bar) > Settings > download Italian.",
+        "4. After that, translation keeps working offline.",
+    ]:
+        out(line)
+    if open_apps is None:
+        open_apps = sys.stdout.isatty()
+    if open_apps and _is_macos():
+        try:
+            ans = input_fn(ui.INDENT + "Open the Translate app now? [y/N] ")
+        except EOFError:
+            ans = ""
+        if ans.strip().lower() in ("y", "yes"):
+            out("Opening Translate...")
+            _open_app("Translate")
+
+
+def run_setup(out=print, input_fn=input, open_apps=None):
+    """Prepare artifacts, show synchronized status, and (only after asking, and
+    only when interactive) open the right apps. Never opens apps in a pipe/test."""
     write_helper()
     bundle = build_quick_action()
 
@@ -220,11 +250,17 @@ def run_setup(out=print, input_fn=input, open_apps=True):
     ]:
         out(line)
 
+    if open_apps is None:
+        open_apps = sys.stdout.isatty()   # never auto-open in a pipe / test
     if open_apps and _is_macos():
-        out("")
-        out("Opening the apps/panes you need...")
-        _open_url("x-apple.systempreferences:com.apple.preference.security"
-                  "?Privacy_Accessibility")
-        _open_app("Automator")
-        if not tr_done:
-            _open_app("Shortcuts")
+        try:
+            ans = input_fn(ui.INDENT + "Open the apps/panes you need now? [y/N] ")
+        except EOFError:
+            ans = ""
+        if ans.strip().lower() in ("y", "yes"):
+            out("Opening...")
+            _open_url("x-apple.systempreferences:com.apple.preference.security"
+                      "?Privacy_Accessibility")
+            _open_app("Automator")
+            if not tr_done:
+                _open_app("Shortcuts")

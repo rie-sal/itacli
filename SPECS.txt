@@ -274,12 +274,15 @@ places a generative model is permitted.
        Cards auto-tagged (pos/gender) on save; grammar LOCKED until enough
        tagged vocab (MIN_TAGGED nouns). Morphology returns a form only when
        certain, else skips (never a wrong answer).
-       Done: morph.py (articles, regular plurals; mlconjug3/Morph-it! hooks);
-       templates.py (definite/indefinite article, noun plural); grammar.py
-       (gating + drill session, logs attempts); vocab pos/gender columns.
-       Next: verb conjugation (needs mlconjug3), agreement, prepositions;
-       LLM-authored lessons; weakness-driven concept selection; Anki custom
-       note-type fields to mirror tags.
+       Done: morph.py (articles, regular plurals; spaCy analyze() for
+       tagging + lemma; mlconjug3 conjugate() incl. irregulars); templates.py
+       (articles, plural, present-tense verb); grammar.py (verb-aware gating +
+       drill session, logs attempts); vocab pos/gender/lemma columns; cards
+       auto-tagged on save. Deps live in .venv (spaCy it_core_news_md,
+       mlconjug3, scikit-learn==1.6.1 pin). Next: passato prossimo + more
+       tenses, agreement, prepositions; LLM-authored lessons; weakness-driven
+       concept selection; Anki custom note-type fields to mirror tags.
+       ENV: install via ./install.sh (see INSTALL.md); run .venv/bin/python.
     3. Vocab/Anki bridge [bridge DONE] + beta Proficiency score.
     4. CEFR / DIALANG-style assessment.
     5. Listening (hardest, last).

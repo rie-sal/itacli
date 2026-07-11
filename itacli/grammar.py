@@ -10,15 +10,16 @@ import random
 
 from . import db, templates, ui
 
-MIN_TAGGED = 6   # tagged nouns needed before grammar unlocks
+MIN_TAGGED = 6   # usable tagged words needed before grammar unlocks
 
 
-def _tagged_nouns():
+def _usable_items():
+    """Vocab the templates can draw on: nouns with gender + verbs (with lemma)."""
     conn = db.connect()
     try:
         rows = conn.execute(
-            "SELECT term, pos, gender FROM vocab "
-            "WHERE pos = 'noun' AND gender IN ('m','f')"
+            "SELECT term, pos, gender, lemma FROM vocab "
+            "WHERE (pos = 'noun' AND gender IN ('m','f')) OR pos = 'verb'"
         ).fetchall()
     finally:
         conn.close()
@@ -43,23 +44,23 @@ def _record(concept, correct):
 def _pool():
     """All (template, item) exercises the current vocab can produce."""
     pool = []
-    for item in _tagged_nouns():
+    for item in _usable_items():
         for t in templates.buildable(item):
             pool.append((t, item))
     return pool
 
 
 def open_grammar():
-    items = _tagged_nouns()
+    items = _usable_items()
     if len(items) < MIN_TAGGED:
         ui.panel("Grammar - locked", [
             "Grammar drills are generated from words you're learning, so the",
             "engine needs some tagged vocabulary first.",
             "",
-            "Tagged nouns: %d / %d needed." % (len(items), MIN_TAGGED),
+            "Usable tagged words: %d / %d needed." % (len(items), MIN_TAGGED),
             "",
             "Read (menu 2) and save unknown words, or use the capture hotkey.",
-            "Nouns ending in -o / -a get tagged automatically.",
+            "Nouns (with gender) and verbs get tagged automatically.",
         ])
         return
 

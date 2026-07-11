@@ -83,7 +83,13 @@ def run(input_fn=input):
             break
         ui.line("  " + res)
 
-    # 3. hand off to the one-time macOS setup
+    # 3. offline language pack (Apple on-device translation)
+    ui.blank()
+    ui.rule()
+    ui.blank()
+    macsetup.language_pack_walkthrough(out=ui.line, input_fn=input_fn)
+
+    # 4. hand off to the one-time macOS setup
     macsetup.write_helper()
     ui.blank()
     ui.rule()

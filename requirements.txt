@@ -1,16 +1,16 @@
-# The scaffold runs on the Python standard library alone (no install needed).
-# These are the dependencies each pillar will pull in as it is built:
+# Active dependencies. Easiest install: ./install.sh  (creates a venv + model).
+# The core app runs on the stdlib alone; these add smarter tagging + verbs.
+spacy>=3.8
+mlconjug3
+scikit-learn==1.6.1     # pin: mlconjug3's bundled model unpickles only on 1.6.x
+# Italian spaCy model is NOT a normal pip package - install it with:
+#   python -m spacy download it_core_news_md
+# Grammar still works WITHOUT these (built-in rules cover articles + regular
+# plurals); spaCy/mlconjug3 add accurate tagging + verb conjugation.
 
-# --- Reading / NLP (Tier 1) ---
-# spacy                 # tokenize, lemmatize, POS, chunking, cloze, card tagging
-# it_core_news_md       # Italian model, ~40MB (python -m spacy download it_core_news_md)
-
-# --- Grammar morphology (deterministic exercise generation) ---
-# mlconjug3             # verb conjugation (unlocks verb templates)
-# Morph-it! lexicon     # free Italian morphology data (~few MB); load into SQLite
+# --- Later / optional ---
+# Morph-it! lexicon     # free Italian morphology data; full-coverage inflection
 #                       # http://docs.sslmit.unibo.it/doku.php?id=resources:morph-it
-# NOTE: grammar works WITHOUT these (built-in rules cover articles + regular
-# plurals); they add verb conjugation and full-coverage accuracy.
 
 # --- Content sourcing ---
 # requests
