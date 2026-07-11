@@ -81,7 +81,7 @@ def library():
 
 
 def settings():
-    from . import db, anki, hotkeys, macsetup, paths
+    from . import db, anki, hotkeys, macsetup, paths, sync
     while True:
         ui.clear()
         ui.blank()
@@ -102,7 +102,11 @@ def settings():
         ui.two_sided("5  Data location", paths.get_data_dir())
         ui.two_sided("6  Re-run macOS setup guide", "")
         ui.two_sided("7  Your name", db.get_setting("user_name") or "(unset)")
-        ui.two_sided("   Anki status", "connected" if anki.is_available() else "offline")
+        pend = sync.pending_count()
+        status = "connected" if anki.is_available() else "offline"
+        if pend:
+            status += " · %d queued" % pend
+        ui.two_sided("   Anki status", status)
         ui.blank()
         ui.line("Enter a number to change it, q to go back.")
         ui.blank()

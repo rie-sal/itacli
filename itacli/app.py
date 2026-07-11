@@ -84,6 +84,10 @@ def main(argv=None):
         from . import onboarding
         onboarding.run()
     db.init_db()
+    from . import sync
+    pushed = sync.flush()          # drain the offline queue if Anki is up
+    if pushed:
+        print(ui.INDENT + "Synced %d queued card(s) to Anki." % pushed)
     menu_loop()
 
 
