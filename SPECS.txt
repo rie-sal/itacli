@@ -264,7 +264,20 @@ places a generative model is permitted.
        (data location + hotkey); `run.py setup` guide. Next: real click-drag
        highlight (with the Textual UI upgrade); Reddit/Wikisource sources;
        prefer passages that ship with questions.
-    2. Grammar (most deterministic, high value).
+    2. [IN PROGRESS] Grammar - deterministic template engine.
+       Design (confirmed): concept TEMPLATES + morphology (morph.py) + your
+       tagged Anki vocab generate fill-in-the-blank exercises at runtime,
+       correct by construction. LLM authors lessons/templates once (verified
+       vs CEFR refs); runtime is deterministic, offline, infinite, personal.
+       Cards auto-tagged (pos/gender) on save; grammar LOCKED until enough
+       tagged vocab (MIN_TAGGED nouns). Morphology returns a form only when
+       certain, else skips (never a wrong answer).
+       Done: morph.py (articles, regular plurals; mlconjug3/Morph-it! hooks);
+       templates.py (definite/indefinite article, noun plural); grammar.py
+       (gating + drill session, logs attempts); vocab pos/gender columns.
+       Next: verb conjugation (needs mlconjug3), agreement, prepositions;
+       LLM-authored lessons; weakness-driven concept selection; Anki custom
+       note-type fields to mirror tags.
     3. Vocab/Anki bridge [bridge DONE] + beta Proficiency score.
     4. CEFR / DIALANG-style assessment.
     5. Listening (hardest, last).

@@ -145,12 +145,15 @@ def _already_have(term):
 
 
 def _save_vocab(term, gloss, context, anki_id):
+    from . import morph
+    pos, gender = morph.guess_features(term)
     conn = db.connect()
     try:
         conn.execute(
             "INSERT INTO vocab(term, gloss, source_context, status, "
-            "anki_note_id, added_from) VALUES (?, ?, ?, 'new', ?, 'capture')",
-            (term, gloss, context, anki_id),
+            "anki_note_id, added_from, pos, gender) "
+            "VALUES (?, ?, ?, 'new', ?, 'capture', ?, ?)",
+            (term, gloss, context, anki_id, pos, gender),
         )
         conn.commit()
     finally:

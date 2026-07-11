@@ -2,8 +2,15 @@
 # These are the dependencies each pillar will pull in as it is built:
 
 # --- Reading / NLP (Tier 1) ---
-# spacy                 # tokenize, lemmatize, POS, chunking, cloze
-# it-core-news-lg       # Italian model (spacy download)
+# spacy                 # tokenize, lemmatize, POS, chunking, cloze, card tagging
+# it_core_news_md       # Italian model, ~40MB (python -m spacy download it_core_news_md)
+
+# --- Grammar morphology (deterministic exercise generation) ---
+# mlconjug3             # verb conjugation (unlocks verb templates)
+# Morph-it! lexicon     # free Italian morphology data (~few MB); load into SQLite
+#                       # http://docs.sslmit.unibo.it/doku.php?id=resources:morph-it
+# NOTE: grammar works WITHOUT these (built-in rules cover articles + regular
+# plurals); they add verb conjugation and full-coverage accuracy.
 
 # --- Content sourcing ---
 # requests

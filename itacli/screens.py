@@ -21,13 +21,8 @@ def reading():
 
 
 def grammar():
-    ui.panel("Grammar", [
-        "Scraped lessons and auto-graded exercises, concept by concept.",
-        "Mastery per concept feeds the adaptive engine so you review what",
-        "you actually struggle with.",
-        "",
-        "Build step 2: the most deterministic pillar.",
-    ])
+    from . import grammar as grammar_pillar
+    grammar_pillar.open_grammar()
 
 
 def vocabulary():

@@ -97,12 +97,15 @@ def save_word(term, context):
         return None
     gloss = capture.translate(term)
     note_id = anki.add_card(term, gloss) if anki.is_available() else None
+    from . import morph
+    pos, gender = morph.guess_features(term)
     conn = db.connect()
     try:
         conn.execute(
             "INSERT INTO vocab(term, gloss, source_context, status, "
-            "anki_note_id, added_from) VALUES (?, ?, ?, 'new', ?, 'reading')",
-            (term, gloss, context, note_id),
+            "anki_note_id, added_from, pos, gender) "
+            "VALUES (?, ?, ?, 'new', ?, 'reading', ?, ?)",
+            (term, gloss, context, note_id, pos, gender),
         )
         conn.commit()
     finally:

@@ -38,7 +38,10 @@ CREATE TABLE IF NOT EXISTS vocab (
     source_context TEXT,
     status        TEXT NOT NULL DEFAULT 'new',  -- new|learning|known
     anki_note_id  INTEGER,
-    added_from    TEXT                          -- reading|capture|manual
+    added_from    TEXT,                         -- reading|capture|manual
+    pos           TEXT,                         -- noun|verb|adj|... (for grammar)
+    gender        TEXT,                         -- m|f
+    features      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS attempts (
@@ -97,6 +100,7 @@ def init_db():
     conn = connect()
     try:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         for k, v in DEFAULT_SETTINGS.items():
             conn.execute(
                 "INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", (k, v)
@@ -104,6 +108,14 @@ def init_db():
         conn.commit()
     finally:
         conn.close()
+
+
+def _migrate(conn):
+    """Add columns introduced after a DB was first created."""
+    have = {r[1] for r in conn.execute("PRAGMA table_info(vocab)")}
+    for col in ("pos", "gender", "features"):
+        if col not in have:
+            conn.execute("ALTER TABLE vocab ADD COLUMN %s TEXT" % col)
 
 
 def get_setting(key, default=None):
