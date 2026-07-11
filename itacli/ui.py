@@ -87,18 +87,22 @@ def home(data):
     blank()
     rule()
     blank()
-    two_sided("CEFR level", "%s   (assessed %s)"
-              % (data["cefr_level"], data["cefr_assessed_ago"]))
+    if data.get("cefr_level"):
+        two_sided("CEFR level", "%s   (assessed %s)"
+                  % (data["cefr_level"], data["cefr_assessed"]))
+    else:
+        two_sided("CEFR level", "not assessed yet")
     blank()
-    pct = int(round(data["prof_fraction"] * 100))
-    two_sided("Proficiency".ljust(LABEL_W) + bar(data["prof_fraction"]),
-              "%d%% toward %s" % (pct, data["prof_next_band"]))
+    acc = data.get("accuracy")
+    if acc is None:
+        two_sided("Proficiency".ljust(LABEL_W) + bar(0.0), "no attempts yet")
+    else:
+        two_sided("Proficiency".ljust(LABEL_W) + bar(acc),
+                  "%d%% recent accuracy" % round(acc * 100))
     blank()
-    justify_row("Skills", ["%s %s" % kv for kv in data["skills"].items()])
+    justify_row("Vocabulary", ["%d words saved" % data["vocab_count"]])
     blank()
-    justify_row("Focus", data["focus"])
-    blank()
-    justify_row("Plan", ["%s %d min" % p for p in data["plan"]])
+    justify_row("Focus", data["weak"] if data.get("weak") else ["nothing tracked yet"])
     blank()
     rule()
     blank()

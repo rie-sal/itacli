@@ -1,33 +1,39 @@
-"""Home-screen data. For the scaffold these are illustrative defaults; each
-value gets wired to the DB / scoring engine as the relevant pillar is built.
-"""
+"""Home-screen data - all pulled from the DB, so a fresh user sees zeros, not
+fabricated progress. CEFR and per-skill scores stay blank until the assessment
+and scoring engines exist (SPECS §8-9)."""
 from . import db
 
 
-def home_data():
-    """Return the values the home screen renders.
+def _clean_concept(tag):
+    return (tag.split(":")[-1] if ":" in tag else tag).replace("-", " ")
 
-    Placeholder numbers until scoring (§8) and assessments (§9) are live.
-    """
+
+def home_data():
+    conn = db.connect()
+    try:
+        vocab_count = conn.execute("SELECT COUNT(*) FROM vocab").fetchone()[0]
+        total, correct = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(correct), 0) FROM attempts"
+        ).fetchone()
+        weak = [
+            _clean_concept(r[0]) for r in conn.execute(
+                "SELECT concept_tags, SUM(CASE WHEN correct=0 THEN 1 ELSE 0 END) m "
+                "FROM attempts WHERE concept_tags IS NOT NULL "
+                "GROUP BY concept_tags HAVING m > 0 ORDER BY m DESC LIMIT 3"
+            ).fetchall()
+        ]
+        asmt = conn.execute(
+            "SELECT cefr_overall, timestamp FROM assessments ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
     return {
-        "day": int(db.get_setting("day_count", "1")),
         "name": db.get_setting("user_name", ""),
-        "cefr_level": "B1",
-        "cefr_assessed_ago": "3.5h ago",
-        # continuous proficiency: band + fraction toward the next band
-        "prof_fraction": 0.68,
-        "prof_next_band": "B2",
-        "skills": {
-            "Reading": "B1",
-            "Listening": "A2",
-            "Grammar": "B1",
-            "Vocabulary": "B1",
-        },
-        "focus": ["Listening", "Congiuntivo", "Prepositions"],
-        "plan": [
-            ("Grammar", 12),
-            ("Reading", 8),
-            ("Listening", 6),
-            ("Vocab", 4),
-        ],
+        "day": int(db.get_setting("day_count", "1")),
+        "vocab_count": vocab_count,
+        "attempts_total": total,
+        "accuracy": (correct / total) if total else None,   # None = no data yet
+        "weak": weak,
+        "cefr_level": asmt[0] if asmt else None,
+        "cefr_assessed": (asmt[1][:10] if asmt and asmt[1] else None),
     }

@@ -168,7 +168,9 @@ def shortcut_installed(name):
 # --- interactive setup ---------------------------------------------------
 
 def _open_app(name):
-    _run(["open", "-a", name])
+    """Launch an app by name. Returns True only if it actually launched."""
+    res = _run(["open", "-a", name])
+    return bool(res and res.returncode == 0)
 
 
 def _open_url(url):
@@ -179,33 +181,53 @@ def _is_macos():
     return sys.platform == "darwin"
 
 
+def _app_available(name):
+    """True if an app of this name is known to LaunchServices (does not launch)."""
+    res = _run(["osascript", "-e", 'POSIX path of (path to application "%s")' % name])
+    return bool(res and res.returncode == 0)
+
+
 def language_pack_walkthrough(out=print, input_fn=input, open_apps=None):
-    """Walk the user through downloading Apple's offline language pack, and
-    open the Translate app for them. (Assumes a recent macOS.)"""
-    for line in [
-        "Offline translation - download the language pack",
+    """Guide the user to get Apple's offline language model. Works whether or
+    not the standalone Translate app exists on this Mac."""
+    has_translate = _is_macos() and _app_available("Translate")
+    lines = [
+        "Offline translation - get the on-device language model",
         "",
-        "Apple's translator runs on-device once a language is downloaded, so",
-        "your capture glosses then work with Wi-Fi off. One-time step:",
+        "Apple's translator runs on-device once the Italian model is",
+        "downloaded, so your capture glosses then work with Wi-Fi off.",
         "",
-        "1. The Translate app opens.",
-        "2. Set the two language buttons at the top to Italian and English.",
-        "3. Translate any word once (type 'ciao') while online - macOS then",
-        "   downloads and caches the on-device model.",
-        "   Or: Translate menu (top bar) > Settings > download Italian.",
-        "4. After that, translation keeps working offline.",
-    ]:
+        "Most reliable: after you create the 'itacli Translate' Shortcut",
+        "(setup step 3), run it ONCE while online - macOS downloads the",
+        "Italian model the first time, then it works offline forever.",
+    ]
+    if has_translate:
+        lines += [
+            "",
+            "You also have the Translate app: open it, set the two language",
+            "buttons to Italian and English, and it can manage downloads too.",
+        ]
+    else:
+        lines += [
+            "",
+            "(This Mac has no standalone Translate app - that's fine; the",
+            "Shortcut route above is all you need.)",
+        ]
+    for line in lines:
         out(line)
+
     if open_apps is None:
         open_apps = sys.stdout.isatty()
-    if open_apps and _is_macos():
+    if open_apps and has_translate:
         try:
             ans = input_fn(ui.INDENT + "Open the Translate app now? [y/N] ")
         except EOFError:
             ans = ""
         if ans.strip().lower() in ("y", "yes"):
-            out("Opening Translate...")
-            _open_app("Translate")
+            if _open_app("Translate"):
+                out("Opening Translate...")
+            else:
+                out("Could not open Translate - use the Shortcut route above.")
 
 
 def run_setup(out=print, input_fn=input, open_apps=None):
