@@ -1,17 +1,26 @@
 """One-time macOS setup for the capture hotkey + Apple Translate (SPECS §10).
 
-The thin-invoker model: itacli exposes the `capture` command; the OS binds it
-to a hotkey. On macOS the leanest native binder is an Automator Quick Action
-plus a Services keyboard shortcut - nothing of ours stays resident.
+Thin-invoker model: itacli exposes `capture`; the OS binds it to a hotkey. On
+macOS the leanest native binder is an Automator Quick Action + a Services
+keyboard shortcut - nothing of ours stays resident.
 
-Two steps genuinely require your click (Apple security; no app can do them
-silently): adding the Translate Shortcut and binding the hotkey. Everything
-else is prepared here. Run:  python3 run.py setup
+This module can GENERATE the Quick Action bundle (experimental: the plist is
+well-formed, but Automator/Services acceptance must be validated on-device),
+open the relevant apps/panes for you, and detect which pieces are already in
+place so the terminal directions stay in sync with what you've done.
+
+Two steps genuinely need your click (Apple security, unavoidable): granting
+Accessibility and binding the hotkey.
 """
 import os
+import shutil
+import subprocess
 import sys
+import uuid
 
 from . import db, hotkeys, paths
+
+QUICK_ACTION = "itacli capture.workflow"
 
 
 def project_root():
@@ -19,62 +28,203 @@ def project_root():
 
 
 def capture_command():
-    """The exact shell command a binder should run."""
+    """The exact shell command the binder runs."""
     return "%s %s capture" % (sys.executable, os.path.join(project_root(), "run.py"))
 
 
+def _run(cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _staging():
+    d = os.path.join(paths.get_data_dir(), "setup")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def write_helper():
-    """Write an executable helper the Quick Action / Raycast can call."""
-    setup_dir = os.path.join(paths.get_data_dir(), "setup")
-    os.makedirs(setup_dir, exist_ok=True)
-    script = os.path.join(setup_dir, "itacli-capture.command")
+    """Executable helper a Quick Action / Raycast / skhd can call."""
+    script = os.path.join(_staging(), "itacli-capture.command")
     with open(script, "w", encoding="utf-8") as f:
         f.write("#!/bin/bash\nexec %s\n" % capture_command())
     os.chmod(script, 0o755)
     return script
 
 
-def guide_lines():
+# --- experimental Quick Action generation -------------------------------
+
+def build_quick_action():
+    """Write a .workflow bundle to staging. Returns its path.
+
+    EXPERIMENTAL: plistlib guarantees well-formed plists, but whether
+    Automator/Services accept this exact document must be tested on your Mac.
+    """
+    import plistlib
+
+    base = os.path.join(_staging(), QUICK_ACTION)
+    contents = os.path.join(base, "Contents")
+    os.makedirs(contents, exist_ok=True)
+
+    info = {
+        "NSServices": [{
+            "NSMenuItem": {"default": "itacli capture"},
+            "NSMessage": "runWorkflowAsService",
+            "NSSendFileTypes": [],
+            "NSSendTypes": [],
+        }],
+    }
+    with open(os.path.join(contents, "Info.plist"), "wb") as f:
+        plistlib.dump(info, f)
+
+    action = {
+        "action": {
+            "AMAccepts": {"Container": "List", "Optional": True,
+                          "Types": ["com.apple.applescript.object"]},
+            "AMActionVersion": "2.0.3",
+            "AMApplication": ["Automator"],
+            "AMProvides": {"Container": "List",
+                           "Types": ["com.apple.applescript.object"]},
+            "ActionBundlePath": "/System/Library/Automator/Run Shell Script.action",
+            "ActionName": "Run Shell Script",
+            "ActionParameters": {
+                "COMMAND_STRING": capture_command(),
+                "CheckedForUserDefaultShell": True,
+                "inputMethod": 0,
+                "shell": "/bin/bash",
+                "source": "",
+            },
+            "BundleIdentifier": "com.apple.RunShellScript",
+            "CFBundleVersion": "2.0.3",
+            "CanShowSelectedItemsWhenRun": False,
+            "CanShowWhenRun": True,
+            "Category": ["AMCategoryUtilities"],
+            "Class Name": "RunShellScriptAction",
+            "InputUUID": str(uuid.uuid4()),
+            "Keywords": ["Shell", "Script", "Command", "Run", "Unix"],
+            "OutputUUID": str(uuid.uuid4()),
+            "UUID": str(uuid.uuid4()),
+            "UnlocalizedApplications": ["Automator"],
+            "arguments": {},
+            "isViewVisible": 1,
+            "location": "309.000000:253.000000",
+        },
+        "isViewVisible": 1,
+    }
+    wflow = {
+        "AMApplicationBuild": "523",
+        "AMApplicationVersion": "2.10",
+        "AMDocumentVersion": "2",
+        "actions": [action],
+        "connectors": {},
+        "workflowMetaData": {
+            "applicationBundleIDsByPath": {},
+            "applicationPaths": [],
+            "inputTypeIdentifier": "com.apple.Automator.nothing",
+            "outputTypeIdentifier": "com.apple.Automator.nothing",
+            "presentationMode": 11,
+            "processesInput": 0,
+            "serviceInputTypeIdentifier": "com.apple.Automator.nothing",
+            "serviceOutputTypeIdentifier": "com.apple.Automator.nothing",
+            "serviceProcessesInput": 0,
+            "systemImageName": "NSActionTemplate",
+            "useAutomaticInputType": 0,
+            "workflowTypeIdentifier": "com.apple.Automator.servicesMenu",
+        },
+    }
+    with open(os.path.join(contents, "document.wflow"), "wb") as f:
+        plistlib.dump(wflow, f)
+    return base
+
+
+def _services_dir():
+    return os.path.expanduser("~/Library/Services")
+
+
+def quick_action_installed():
+    return os.path.exists(os.path.join(_services_dir(), QUICK_ACTION))
+
+
+def install_quick_action():
+    """Copy the generated bundle into ~/Library/Services and refresh."""
+    src = build_quick_action()
+    os.makedirs(_services_dir(), exist_ok=True)
+    dst = os.path.join(_services_dir(), QUICK_ACTION)
+    if os.path.exists(dst):
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+    _run(["/System/Library/CoreServices/pbs", "-flush"])
+    return dst
+
+
+def shortcut_installed(name):
+    res = _run(["shortcuts", "list"])
+    return bool(res and res.returncode == 0 and
+               name in [l.strip() for l in res.stdout.splitlines()])
+
+
+# --- interactive setup ---------------------------------------------------
+
+def _open_app(name):
+    _run(["open", "-a", name])
+
+
+def _open_url(url):
+    _run(["open", url])
+
+
+def _is_macos():
+    return sys.platform == "darwin"
+
+
+def run_setup(out=print, input_fn=input, open_apps=True):
+    """Prepare artifacts, show synchronized status, and open the right apps."""
+    write_helper()
+    bundle = build_quick_action()
+
     hk = db.get_setting("capture_hotkey", "<cmd>+<shift>+i")
     try:
         pretty = hotkeys.human(hk)
     except ValueError:
         pretty = hk
-    cmd = capture_command()
     tname = db.get_setting("translate_shortcut", "itacli Translate")
-    return [
+
+    qa_done = quick_action_installed()
+    tr_done = shortcut_installed(tname)
+
+    for line in [
         "itacli - one-time macOS setup",
         "",
-        "Your capture hotkey:   %s" % pretty,
-        "Command it will run:   %s" % cmd,
+        "Capture hotkey:  %s" % pretty,
+        "Runs command:    %s" % capture_command(),
         "",
-        "1. Accessibility (needed to copy the selection in any app)",
-        "   System Settings > Privacy & Security > Accessibility > add your",
-        "   terminal (and Automator/Shortcuts) and toggle it on.",
+        "Status",
+        "  [%s] Quick Action installed in ~/Library/Services" % ("x" if qa_done else " "),
+        "  [%s] Translate Shortcut '%s'" % ("x" if tr_done else " ", tname),
+        "  [ ] Accessibility granted   (can't be auto-detected)",
+        "  [ ] Hotkey bound in System Settings",
         "",
-        "2. Capture hotkey - Automator Quick Action (out-of-the-box)",
-        "   a. Open Automator > New > Quick Action.",
-        "   b. 'Workflow receives': no input, in: any application.",
-        "   c. Add the action 'Run Shell Script' and paste:",
-        "        %s" % cmd,
-        "   d. Save as: itacli capture",
-        "   e. System Settings > Keyboard > Keyboard Shortcuts > Services >",
-        "      General > 'itacli capture' > assign %s" % pretty,
+        "Generated (experimental) Quick Action:",
+        "  %s" % bundle,
         "",
-        "3. Apple Translate gloss - Shortcut named '%s'" % tname,
-        "   a. Open Shortcuts > New Shortcut, name it exactly '%s'." % tname,
-        "   b. Add 'Translate Text': from Italian to English,",
-        "      text = Shortcut Input.",
-        "   c. Add 'Stop and output' > Translated Text.",
-        "   (Skip this and cards are still created; you add meanings in Anki.)",
-        "",
-        "A helper script was written to:",
-        "   %s" % os.path.join(paths.get_data_dir(), "setup", "itacli-capture.command"),
-        "Bind that instead if you prefer Raycast/skhd over a Quick Action.",
-    ]
-
-
-def run_setup(out=print):
-    write_helper()
-    for line in guide_lines():
+        "Steps:",
+        "1. Accessibility: add your terminal (+ Automator/Shortcuts), toggle on.",
+        "2. Install the Quick Action: double-click the bundle above (or let me",
+        "   copy it to ~/Library/Services), then bind %s under" % pretty,
+        "   System Settings > Keyboard > Keyboard Shortcuts > Services.",
+        "3. Translate Shortcut '%s': Translate Text (Italian>English)," % tname,
+        "   input = Shortcut Input, then Stop and output > Translated Text.",
+        "   (Optional - cards are still created without it.)",
+    ]:
         out(line)
+
+    if open_apps and _is_macos():
+        out("")
+        out("Opening the apps/panes you need...")
+        _open_url("x-apple.systempreferences:com.apple.preference.security"
+                  "?Privacy_Accessibility")
+        _open_app("Automator")
+        if not tr_done:
+            _open_app("Shortcuts")

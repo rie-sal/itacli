@@ -101,6 +101,7 @@ def settings():
         ui.two_sided("4  Anki deck", db.get_setting("anki_deck"))
         ui.two_sided("5  Data location", paths.get_data_dir())
         ui.two_sided("6  Re-run macOS setup guide", "")
+        ui.two_sided("7  Your name", db.get_setting("user_name") or "(unset)")
         ui.two_sided("   Anki status", "connected" if anki.is_available() else "offline")
         ui.blank()
         ui.line("Enter a number to change it, q to go back.")
@@ -148,6 +149,7 @@ def settings():
                 "2": ("translate_shortcut", "macOS Shortcut name (blank to disable): "),
                 "3": ("interests", "Interests, comma-separated: "),
                 "4": ("anki_deck", "Anki deck name: "),
+                "7": ("user_name", "Your name: "),
             }
             if choice in prompts:
                 key, prompt = prompts[choice]

@@ -8,6 +8,8 @@ Layout contract:
     row's items distributed so the last item lands flush on the right margin.
 """
 import os
+import sys
+import time
 
 INDENT = "     "   # left margin
 WIDTH = 72         # the measure (also the length of every rule)
@@ -29,6 +31,19 @@ def line(text=""):
 
 def blank():
     print()
+
+
+def slow(text="", delay=0.018):
+    """Typewriter print (only when attached to a terminal; instant otherwise)."""
+    if delay and sys.stdout.isatty():
+        sys.stdout.write(INDENT)
+        for ch in text:
+            sys.stdout.write(ch)
+            sys.stdout.flush()
+            time.sleep(delay)
+        sys.stdout.write("\n")
+    else:
+        print(INDENT + text)
 
 
 def two_sided(left, right):
@@ -65,7 +80,10 @@ def bar(fraction):
 def home(data):
     clear()
     blank()
-    two_sided("ITACLI · Italian", "Day %d" % data["day"])
+    left = "ITACLI · Italian"
+    if data.get("name"):
+        left = "ITACLI · Italian   —   ciao, %s" % data["name"]
+    two_sided(left, "Day %d" % data["day"])
     blank()
     rule()
     blank()

@@ -11,6 +11,7 @@ def home_data():
     """
     return {
         "day": int(db.get_setting("day_count", "1")),
+        "name": db.get_setting("user_name", ""),
         "cefr_level": "B1",
         "cefr_assessed_ago": "3.5h ago",
         # continuous proficiency: band + fraction toward the next band

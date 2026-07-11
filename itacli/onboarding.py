@@ -1,29 +1,66 @@
-"""First-run setup: choose where data lives, pick a valid capture hotkey,
-then point the user at the one-time macOS setup (SPECS §5, §10)."""
+"""First-run setup: greet the learner (name, Pokemon-style), choose where data
+lives, pick a valid capture hotkey, then hand off to macOS setup (SPECS §5, §10).
+"""
+import getpass
+import os
+
 from . import db, hotkeys, macsetup, paths, ui
+
+
+def detect_name():
+    """Best-effort first name from the system (macOS full name, else login)."""
+    try:
+        import pwd
+        gecos = pwd.getpwuid(os.getuid()).pw_gecos.split(",")[0].strip()
+        if gecos:
+            return gecos.split()[0]
+    except Exception:
+        pass
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "amico"
 
 
 def run(input_fn=input):
     ui.clear()
     ui.blank()
-    ui.line("Benvenuto - welcome to itacli.")
+    ui.slow("Benvenuto! Welcome to the world of itacli.")
+    ui.blank()
+    ui.slow("First - what should I call you?")
+    ui.blank()
+
+    guess = detect_name()
+    ui.line("(I guessed: %s. Press Enter to keep it, or type a name.)" % guess)
+    try:
+        name = input_fn(ui.INDENT + "name: ").strip()
+    except EOFError:
+        name = ""
+    name = name or guess
+    ui.blank()
+    ui.slow("Piacere, %s. Let's get you set up." % name)
     ui.blank()
     ui.rule()
     ui.blank()
 
-    # 1. data location
-    default = paths.default_data_dir()
-    ui.line("Where should your data (database + cached texts) live?")
-    ui.line("Default: %s" % default)
-    ui.blank()
-    try:
-        ans = input_fn(ui.INDENT + "path (Enter for default): ").strip()
-    except EOFError:
-        ans = ""
-    chosen = paths.set_data_dir(ans or default)
-    db.init_db()
-    ui.blank()
-    ui.line("Data dir: %s" % chosen)
+    # 1. data location (skipped when a sandbox dir is forced via env)
+    if paths._env_dir():
+        db.init_db()
+        ui.line("Sandbox data dir: %s" % paths.get_data_dir())
+    else:
+        default = paths.default_data_dir()
+        ui.line("Where should your data (database + cached texts) live?")
+        ui.line("Default: %s" % default)
+        ui.blank()
+        try:
+            ans = input_fn(ui.INDENT + "path (Enter for default): ").strip()
+        except EOFError:
+            ans = ""
+        chosen = paths.set_data_dir(ans or default)
+        db.init_db()
+        ui.blank()
+        ui.line("Data dir: %s" % chosen)
+    db.set_setting("user_name", name)
     ui.blank()
 
     # 2. capture hotkey (validated against reserved combos)

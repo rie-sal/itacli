@@ -82,6 +82,7 @@ DEFAULT_SETTINGS = {
     "capture_hotkey": "<cmd>+<shift>+i",   # the single do-everything shortcut
     "translate_shortcut": "itacli Translate",  # macOS Shortcut used for glosses
     "anki_deck": "itacli",
+    "user_name": "",
 }
 
 

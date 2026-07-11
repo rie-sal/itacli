@@ -70,6 +70,11 @@ def main(argv=None):
         if cmd == "setup":
             from . import macsetup
             return macsetup.run_setup()
+        if cmd == "package":
+            from . import packaging
+            dest = packaging.build_zip(rest[0] if rest else None)
+            print("Wrote test zip: %s" % dest)
+            return
         if cmd == "add":
             return _quick_add(rest)
         print("Unknown command: %s" % cmd)

@@ -9,6 +9,12 @@ import sys
 APP = "itacli"
 
 
+def _env_dir():
+    """Test/sandbox override: ITACLI_DATA_DIR wins over the bootstrap file, so
+    a throwaway run never touches your real data."""
+    return os.environ.get("ITACLI_DATA_DIR")
+
+
 def _bootstrap_path():
     return os.path.join(os.path.expanduser("~"), ".itacli.json")
 
@@ -32,11 +38,13 @@ def _load():
 
 
 def is_first_run():
+    if _env_dir():
+        return not os.path.exists(os.path.join(_env_dir(), "itacli.db"))
     return "data_dir" not in _load()
 
 
 def get_data_dir():
-    d = _load().get("data_dir") or default_data_dir()
+    d = _env_dir() or _load().get("data_dir") or default_data_dir()
     os.makedirs(d, exist_ok=True)
     return d
 
