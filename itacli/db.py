@@ -3,10 +3,9 @@
 The scaffold creates the full schema now so every pillar has a home to grow
 into, even while the pillars themselves are stubs.
 """
-import os
 import sqlite3
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "itacli.db")
+from . import paths
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sources (
@@ -81,13 +80,13 @@ DEFAULT_SETTINGS = {
     "study_minutes_total": "0",
     "day_count": "1",
     "capture_hotkey": "<cmd>+<shift>+i",   # the single do-everything shortcut
-    "translate_shortcut": "",              # optional macOS Shortcut name for glosses
+    "translate_shortcut": "itacli Translate",  # macOS Shortcut used for glosses
     "anki_deck": "itacli",
 }
 
 
 def connect():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(paths.db_path())
     conn.row_factory = sqlite3.Row
     return conn
 

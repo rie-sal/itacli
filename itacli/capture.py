@@ -17,8 +17,10 @@ Pipeline (all on the single trigger):
       -> dedupe against existing vocab + a stoplist
       -> smart-save the relevant cards to Anki
 """
+import os
 import subprocess
 import sys
+import tempfile
 
 from . import anki, db
 
@@ -50,17 +52,44 @@ def read_selection():
     return (res.stdout if res and res.returncode == 0 else "").strip()
 
 
-def translate(text):
-    """Best-effort gloss via a macOS Shortcut named in Settings. No LLM.
+_shortcuts_cache = None
 
-    Returns "" if not configured / unavailable; the card is still created and
-    you can add the meaning in Anki.
+
+def _installed_shortcuts():
+    """Names of the user's macOS Shortcuts (cached per process)."""
+    global _shortcuts_cache
+    if _shortcuts_cache is None:
+        res = _run(["shortcuts", "list"])
+        _shortcuts_cache = (
+            set(l.strip() for l in res.stdout.splitlines() if l.strip())
+            if res and res.returncode == 0 else set()
+        )
+    return _shortcuts_cache
+
+
+def translate(text):
+    """Gloss via Apple's on-device translation, run through a macOS Shortcut.
+
+    Uses file I/O (--input-path/--output-path) for reliability. Returns "" if
+    the Shortcut isn't installed yet, so the card is still created and you can
+    add the meaning in Anki. No LLM, no network.
     """
     name = db.get_setting("translate_shortcut", "")
-    if not name:
+    if not name or name not in _installed_shortcuts():
         return ""
-    res = _run(["shortcuts", "run", name], text_in=text)
-    return (res.stdout.strip() if res and res.returncode == 0 else "")
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            fin, fout = os.path.join(d, "in.txt"), os.path.join(d, "out.txt")
+            with open(fin, "w", encoding="utf-8") as f:
+                f.write(text)
+            res = _run(["shortcuts", "run", name,
+                        "--input-path", fin, "--output-path", fout])
+            if res and res.returncode == 0 and os.path.exists(fout):
+                with open(fout, encoding="utf-8") as f:
+                    return f.read().strip()
+    except OSError:
+        pass
+    return ""
 
 
 def chunk(text):

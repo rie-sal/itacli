@@ -75,7 +75,12 @@ places a generative model is permitted.
     assessments       timestamp, study_minutes_at_time, per-skill CEFR,
                       overall CEFR, item_ids_used
     settings          time_budget, activity_ratio_mode, goals/interests,
-                      anki_config, dictionary/MT config, api_key
+                      anki_config, dictionary/MT config, api_key,
+                      capture_hotkey, translate_shortcut
+    STORAGE LOCATION  chosen at first run, changeable in Settings. A tiny
+                      bootstrap ~/.itacli.json records the data dir; the DB
+                      + content cache live inside it (default on macOS:
+                      ~/Library/Application Support/itacli). itacli/paths.py.
 
 ------------------------------------------------------------------------------
 6. INTERFACE
@@ -186,16 +191,33 @@ places a generative model is permitted.
 ------------------------------------------------------------------------------
 10. WORD CAPTURE - GLOBAL HOTKEY
 ------------------------------------------------------------------------------
-    - ONE global hotkey triggers the ENTIRE pipeline, always, in ALL apps
-      (Discord/WhatsApp included), by simulating copy and reading the
-      clipboard. This is the vital, do-everything trigger; the native OS
-      popup (below) never replaces it.
+    - Architecture: THIN INVOKER. itacli exposes one command (`capture`:
+      grab selection -> run pipeline). The hotkey binding is delegated to
+      each OS's leanest native mechanism so nothing of ours stays resident.
+        macOS  = Automator Quick Action + Services keyboard shortcut (DONE)
+        Windows= AutoHotkey / registered hotkey (later)
+        Linux  = sxhkd / desktop keybinding (later)
+      Optional fallback on any OS: `run.py listen` (pynput daemon, in-app
+      rebinding, one pip install). Third-party launchers (skhd/Raycast) are
+      a power-user option, not the default.
+    - Unavoidable floor (Apple security, shared by every option): a one-time
+      Accessibility grant (to simulate Cmd+C so it works in Electron apps)
+      and one click to bind the hotkey. `run.py setup` prints a personalized
+      guide for these; helper script written to <data_dir>/setup/.
+    - Hotkey selection is validated: reserved system/app combos and
+      modifier-less combos are rejected (itacli/hotkeys.py). Full cross-app
+      enumeration is impossible on macOS; the curated reserved list + the
+      system's own conflict check at bind time cover it.
+    - ONE hotkey triggers the ENTIRE pipeline, in ALL apps (Discord/WhatsApp
+      included), by simulating copy and reading the clipboard.
     - Pipeline (all on that single shortcut): capture text -> translate/show
       -> spaCy chunks it (tokens, lemmas, noun-chunks) -> mint a card per
       content word/chunk -> dedupe -> smart-save relevant cards to Anki.
-    - Translation engine (no LLM): dictionary gloss per word + local neural
-      MT (Apple on-device via Shortcuts "Translate Text", or OPUS-MT /
-      Argos Translate) per phrase.
+    - Translation engine (no LLM): Apple on-device translation via a macOS
+      Shortcut named in Settings (default "itacli Translate"), run with
+      file I/O for reliability. WIRED (itacli/capture.py translate()); falls
+      back to empty gloss (card still created) if the Shortcut isn't set up.
+      Dictionary / OPUS-MT / Argos remain options for other platforms.
     - Native macOS Translate popup: used where the OS exposes it (Safari,
       Notes, etc.). It CANNOT be forced over apps that don't register the
       text service (Discord/WhatsApp) - there we fall back to Apple's
@@ -234,11 +256,14 @@ places a generative model is permitted.
        schema, git initialized, pillars stubbed.
     1. [IN PROGRESS] Reading + highlight -> Anki (the spine).
        Done: Gutenberg fetch (stdlib) + bundled offline excerpt; passage
-       reader with position memory; type-to-save words -> vocab + Anki.
+       reader with position memory; type-to-save words -> vocab + Anki;
+       deterministic cloze comprehension check per page (logged to attempts).
        Also done early (per request): Anki bridge (AnkiConnect over stdlib
-       urllib) and the single-hotkey capture pipeline with a user-selectable
-       shortcut (Settings). Next: cloze comprehension; real click-drag
-       highlight (with the Textual UI upgrade); Reddit/Wikisource sources.
+       urllib); single-hotkey capture pipeline (thin invoker) with validated
+       user-selectable shortcut; Apple Translate wiring; first-run onboarding
+       (data location + hotkey); `run.py setup` guide. Next: real click-drag
+       highlight (with the Textual UI upgrade); Reddit/Wikisource sources;
+       prefer passages that ship with questions.
     2. Grammar (most deterministic, high value).
     3. Vocab/Anki bridge [bridge DONE] + beta Proficiency score.
     4. CEFR / DIALANG-style assessment.

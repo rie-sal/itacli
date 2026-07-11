@@ -7,7 +7,7 @@
 """
 import sys
 
-from . import db, state, ui, screens
+from . import db, paths, state, ui, screens
 
 MENU = {
     "1": screens.daily,
@@ -54,8 +54,12 @@ def menu_loop():
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    db.init_db()
+
     if argv:
+        # commands run headless; ensure a data dir exists without onboarding
+        if paths.is_first_run():
+            paths.set_data_dir(paths.default_data_dir())
+        db.init_db()
         cmd, rest = argv[0], argv[1:]
         if cmd == "listen":
             from . import capture
@@ -63,10 +67,18 @@ def main(argv=None):
         if cmd == "capture":
             from . import capture
             return capture.capture_once()
+        if cmd == "setup":
+            from . import macsetup
+            return macsetup.run_setup()
         if cmd == "add":
             return _quick_add(rest)
         print("Unknown command: %s" % cmd)
         return
+
+    if paths.is_first_run():
+        from . import onboarding
+        onboarding.run()
+    db.init_db()
     menu_loop()
 
 

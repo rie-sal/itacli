@@ -7,14 +7,14 @@ to Anki, and saved to the vocab table for review.
 "Highlight" here means typing the unknown words. True click-drag selection
 arrives with the Textual UI upgrade; the save loop underneath is identical.
 """
+import datetime
 import os
+import re
 import textwrap
 import urllib.error
 import urllib.request
 
-from . import anki, capture, db, ui
-
-CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "content_cache")
+from . import anki, capture, db, paths, ui
 
 # Best-effort curated Italian texts. If a fetch fails, the reader falls back to
 # the bundled excerpt below, so the pillar always works offline.
@@ -62,8 +62,7 @@ def _strip_gutenberg(text):
 
 def fetch_book(book_id):
     """Return the book text, caching to content_cache/. Raises on failure."""
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    cached = os.path.join(CACHE_DIR, "%s.txt" % book_id)
+    cached = os.path.join(paths.content_cache(), "%s.txt" % book_id)
     if os.path.exists(cached):
         with open(cached, encoding="utf-8") as f:
             return f.read()
@@ -109,6 +108,64 @@ def save_word(term, context):
     finally:
         conn.close()
     return note_id
+
+
+def _norm(word):
+    return word.strip().lower().strip(".,;:!?\"'()[]«»…")
+
+
+def _make_cloze(paragraph):
+    """Blank one content word from a sentence. Returns (prompt, answer) or None.
+
+    Deterministic (spaCy-free): picks the first long, non-stopword token.
+    """
+    for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
+        for raw in sentence.split():
+            word = raw.strip(".,;:!?\"'()[]«»…")
+            if word.isalpha() and len(word) >= 5 and _norm(word) not in capture._STOP:
+                blanked = re.sub(r"\b%s\b" % re.escape(word), "_____", sentence, count=1)
+                return blanked, word
+    return None
+
+
+def _record_attempt(correct, tag):
+    conn = db.connect()
+    try:
+        conn.execute(
+            "INSERT INTO attempts(content_item_id, correct, timestamp, concept_tags) "
+            "VALUES (NULL, ?, ?, ?)",
+            (1 if correct else 0, datetime.datetime.now().isoformat(timespec="seconds"), tag),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _run_cloze(paragraph):
+    """One quick fill-in-the-blank check on the paragraph just read."""
+    made = _make_cloze(paragraph)
+    if not made:
+        return
+    prompt, answer = made
+    ui.blank()
+    ui.line("Quick check - fill the blank (Enter to skip):")
+    ui.blank()
+    for wline in textwrap.wrap(prompt, ui.WIDTH):
+        ui.line(wline)
+    ui.blank()
+    try:
+        guess = input(ui.INDENT + "  = ").strip()
+    except EOFError:
+        return
+    if not guess:
+        return
+    correct = _norm(guess) == _norm(answer)
+    _record_attempt(correct, "reading-cloze")
+    ui.line("  " + ("correct!" if correct else "the word was: %s" % answer))
+    try:
+        input(ui.INDENT + "  press Enter ")
+    except EOFError:
+        return
 
 
 def _read_book(book):
@@ -159,6 +216,7 @@ def _read_book(book):
                 input(ui.INDENT + "  press Enter ")
             except EOFError:
                 break
+        _run_cloze(paras[pos])
         pos += 1
         db.set_setting(_pos_key(book["id"]), pos)
 

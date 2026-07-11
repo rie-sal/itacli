@@ -81,7 +81,7 @@ def library():
 
 
 def settings():
-    from . import db, anki
+    from . import db, anki, hotkeys, macsetup, paths
     while True:
         ui.clear()
         ui.blank()
@@ -89,12 +89,18 @@ def settings():
         ui.blank()
         ui.rule()
         ui.blank()
-        ui.two_sided("1  Capture hotkey", db.get_setting("capture_hotkey"))
+        try:
+            hk = hotkeys.human(db.get_setting("capture_hotkey"))
+        except ValueError:
+            hk = db.get_setting("capture_hotkey")
+        ui.two_sided("1  Capture hotkey", hk)
         ui.two_sided("2  Translate Shortcut (macOS)",
                      db.get_setting("translate_shortcut") or "(none)")
         ui.two_sided("3  Interests (for subreddits)",
                      db.get_setting("interests") or "(none)")
         ui.two_sided("4  Anki deck", db.get_setting("anki_deck"))
+        ui.two_sided("5  Data location", paths.get_data_dir())
+        ui.two_sided("6  Re-run macOS setup guide", "")
         ui.two_sided("   Anki status", "connected" if anki.is_available() else "offline")
         ui.blank()
         ui.line("Enter a number to change it, q to go back.")
@@ -107,17 +113,46 @@ def settings():
             return
         if choice in ("q", ""):
             return
-        prompts = {
-            "1": ("capture_hotkey",
-                  "Hotkey (pynput format, e.g. <cmd>+<shift>+i): "),
-            "2": ("translate_shortcut", "macOS Shortcut name (blank to disable): "),
-            "3": ("interests", "Interests, comma-separated: "),
-            "4": ("anki_deck", "Anki deck name: "),
-        }
-        if choice in prompts:
-            key, prompt = prompts[choice]
+        if choice == "1":
+            while True:
+                try:
+                    raw = input(ui.INDENT + "Hotkey (e.g. cmd+shift+i, blank to keep): ").strip()
+                except EOFError:
+                    break
+                if not raw:
+                    break
+                ok, res = hotkeys.validate(raw)
+                if ok:
+                    db.set_setting("capture_hotkey", res)
+                    break
+                ui.line("  " + res)
+        elif choice == "5":
             try:
-                val = input(ui.INDENT + prompt).strip()
+                newdir = input(ui.INDENT + "New data location (blank to keep): ").strip()
+            except EOFError:
+                continue
+            if newdir:
+                paths.set_data_dir(newdir)
+                db.init_db()
+        elif choice == "6":
+            ui.clear()
+            ui.blank()
+            macsetup.run_setup(out=ui.line)
+            ui.blank()
+            try:
+                input(ui.INDENT + "press Enter ")
             except EOFError:
                 return
-            db.set_setting(key, val)
+        else:
+            prompts = {
+                "2": ("translate_shortcut", "macOS Shortcut name (blank to disable): "),
+                "3": ("interests", "Interests, comma-separated: "),
+                "4": ("anki_deck", "Anki deck name: "),
+            }
+            if choice in prompts:
+                key, prompt = prompts[choice]
+                try:
+                    val = input(ui.INDENT + prompt).strip()
+                except EOFError:
+                    return
+                db.set_setting(key, val)
