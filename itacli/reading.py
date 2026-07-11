@@ -227,6 +227,53 @@ def _read_book(book):
         ui.panel("Reading", ["You reached the end of this text. Complimenti!"])
 
 
+def _read_wikisource():
+    from . import sources
+    try:
+        title = input(ui.INDENT + "Wikisource title (e.g. Pinocchio): ").strip()
+    except EOFError:
+        return
+    if not title:
+        return
+    try:
+        text = sources.wikisource_text(title)
+    except RuntimeError as e:
+        ui.panel("Wikisource", [str(e)])
+        return
+    _read_book({"id": "wikisource:%s" % title, "title": title,
+                "author": "Wikisource", "text": text})
+
+
+def _read_reddit():
+    from . import sources
+    interests = db.get_setting("interests", "")
+    suggestions = sources.suggest_subreddits(interests)
+    ui.clear()
+    ui.blank()
+    ui.line("Reddit - native-speaker threads")
+    ui.blank()
+    ui.rule()
+    ui.blank()
+    ui.line("Suggested (from your interests): " + ", ".join(suggestions))
+    ui.blank()
+    try:
+        sub = input(ui.INDENT + "subreddit (name, blank for %s): " % suggestions[0]).strip()
+    except EOFError:
+        return
+    sub = sub or suggestions[0]
+    try:
+        posts = sources.reddit_posts(sub)
+    except RuntimeError as e:
+        ui.panel("Reddit", [str(e)])
+        return
+    if not posts:
+        ui.panel("Reddit", ["No Italian-looking posts found in r/%s right now." % sub])
+        return
+    text = "\n\n".join(posts)
+    _read_book({"id": "reddit:%s" % sub, "title": "r/%s" % sub,
+                "author": "Reddit", "text": text})
+
+
 def open_reading():
     """Menu entry: pick a source, then read."""
     while True:
@@ -240,6 +287,8 @@ def open_reading():
         for i, b in enumerate(CURATED, start=1):
             ui.line("%d  %s - %s  (Gutenberg #%s)" % (i, b["title"], b["author"], b["id"]))
         ui.line("g  Enter any Project Gutenberg ID")
+        ui.line("w  Wikisource (enter a title)")
+        ui.line("r  Reddit (native-speaker threads)")
         ui.line("q  Back to menu")
         ui.blank()
         ui.rule()
@@ -259,5 +308,9 @@ def open_reading():
                 return
             if bid:
                 _read_book({"id": bid, "title": "Gutenberg #%s" % bid, "author": ""})
+        elif choice == "w":
+            _read_wikisource()
+        elif choice == "r":
+            _read_reddit()
         elif choice.isdigit() and 1 <= int(choice) <= len(CURATED):
             _read_book(CURATED[int(choice) - 1])

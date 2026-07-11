@@ -261,9 +261,11 @@ places a generative model is permitted.
        Also done early (per request): Anki bridge (AnkiConnect over stdlib
        urllib); single-hotkey capture pipeline (thin invoker) with validated
        user-selectable shortcut; Apple Translate wiring; first-run onboarding
-       (data location + hotkey); `run.py setup` guide. Next: real click-drag
-       highlight (with the Textual UI upgrade); Reddit/Wikisource sources;
-       prefer passages that ship with questions.
+       (data location + hotkey); `run.py setup` guide; Reddit + Wikisource
+       sources (sources.py; unauthenticated JSON + Italian-ratio language
+       filter; live fetch untested in sandbox but parsing verified with mocks).
+       Next: real click-drag highlight (with the Textual UI upgrade); prefer
+       passages that ship with questions; install spaCy medium for tagging.
     2. [IN PROGRESS] Grammar - deterministic template engine.
        Design (confirmed): concept TEMPLATES + morphology (morph.py) + your
        tagged Anki vocab generate fill-in-the-blank exercises at runtime,
