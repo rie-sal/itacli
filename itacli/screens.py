@@ -47,13 +47,27 @@ def listening():
 
 
 def assessment():
-    ui.panel("Assessment & CEFR", [
-        "Periodic, closed-form CEFR assessment (DIALANG-style; no speaking).",
-        "Spaced by time studied, not calendar days. May reuse exercise-pool",
-        "questions. Writing assessment planned for later.",
-        "",
-        "Build step 4.",
-    ])
+    from . import assessment as assess
+    ui.clear()
+    ui.blank()
+    ui.line("Assessment & CEFR")
+    ui.blank()
+    ui.rule()
+    ui.blank()
+    ui.line("A short closed-form CEFR check (multiple choice, no speaking).")
+    ui.line(assess.cadence_note())
+    ui.blank()
+    ui.line("Enter to start, q to go back.")
+    ui.blank()
+    ui.rule()
+    ui.blank()
+    try:
+        choice = input(ui.INDENT + "> ").strip().lower()
+    except EOFError:
+        return
+    if choice in ("q",):
+        return
+    assess.open_assessment()
 
 
 def progress():

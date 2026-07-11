@@ -284,7 +284,15 @@ places a generative model is permitted.
        concept selection; Anki custom note-type fields to mirror tags.
        ENV: install via ./install.sh (see INSTALL.md); run .venv/bin/python.
     3. Vocab/Anki bridge [bridge DONE] + beta Proficiency score.
-    4. CEFR / DIALANG-style assessment.
+    4. [DONE, beta] CEFR / DIALANG-style assessment.
+       assessment_items.py: curated CEFR-tagged multiple-choice bank (A1-B2,
+       grammar+vocab; choices shuffled at display). assessment.py: administers
+       all items, estimates band = highest contiguous level passed (>=60%),
+       stores to assessments table, wires to home screen. study.py: tracks
+       study minutes (session Timer on reading + grammar); cadence recommends
+       a check every ~180 study-minutes (manual "test me now" always allowed).
+       Next: per-skill bands from skill items; reading/listening items;
+       writing assessment (future); auto-prompt when due.
     5. Listening (hardest, last).
     NOTE: "build everything at once" and "test ASAP" conflict; scaffold-all
     then fill-incrementally satisfies both.

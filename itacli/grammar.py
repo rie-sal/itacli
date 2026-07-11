@@ -8,7 +8,7 @@ the engine to draw on.
 import datetime
 import random
 
-from . import db, templates, ui
+from . import db, study, templates, ui
 
 MIN_TAGGED = 6   # usable tagged words needed before grammar unlocks
 
@@ -73,6 +73,11 @@ def open_grammar():
         return
 
     random.shuffle(pool)
+    with study.Timer():
+        _drill(pool)
+
+
+def _drill(pool):
     asked = right = 0
     for template, item in pool[:8]:
         ex = template.build(item)

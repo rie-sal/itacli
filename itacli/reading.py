@@ -14,7 +14,7 @@ import textwrap
 import urllib.error
 import urllib.request
 
-from . import anki, capture, db, paths, ui
+from . import anki, capture, db, paths, study, ui
 
 # Best-effort curated Italian texts. If a fetch fails, the reader falls back to
 # the bundled excerpt below, so the pillar always works offline.
@@ -183,45 +183,46 @@ def _read_book(book):
     paras = _paragraphs(text)
     pos = int(db.get_setting(_pos_key(book["id"]), "0"))
 
-    while pos < len(paras):
-        ui.clear()
-        ui.blank()
-        ui.two_sided(book["title"], "%d / %d" % (pos + 1, len(paras)))
-        ui.blank()
-        ui.rule()
-        ui.blank()
-        for wline in textwrap.wrap(paras[pos], ui.WIDTH):
-            ui.line(wline)
-        ui.blank()
-        ui.rule()
-        ui.blank()
-        ui.line("Type unknown words (comma-separated) to save them,")
-        ui.line("Enter to continue, b = back, q = quit reading.")
-        ui.blank()
-        try:
-            raw = input(ui.INDENT + "> ").strip()
-        except EOFError:
-            break
-        if raw.lower() in ("q", "quit"):
-            break
-        if raw.lower() in ("b", "back"):
-            pos = max(0, pos - 1)
-            db.set_setting(_pos_key(book["id"]), pos)
-            continue
-        if raw:
-            words = [w.strip() for w in raw.split(",") if w.strip()]
-            saved = [w for w in words if save_word(w, paras[pos]) is not None or True]
-            up = anki.is_available()
+    with study.Timer():
+        while pos < len(paras):
+            ui.clear()
             ui.blank()
-            ui.line("Saved %d word(s)%s." % (len(saved),
-                    "" if up else " (vocab only - open Anki to sync cards)"))
+            ui.two_sided(book["title"], "%d / %d" % (pos + 1, len(paras)))
+            ui.blank()
+            ui.rule()
+            ui.blank()
+            for wline in textwrap.wrap(paras[pos], ui.WIDTH):
+                ui.line(wline)
+            ui.blank()
+            ui.rule()
+            ui.blank()
+            ui.line("Type unknown words (comma-separated) to save them,")
+            ui.line("Enter to continue, b = back, q = quit reading.")
+            ui.blank()
             try:
-                input(ui.INDENT + "  press Enter ")
+                raw = input(ui.INDENT + "> ").strip()
             except EOFError:
                 break
-        _run_cloze(paras[pos])
-        pos += 1
-        db.set_setting(_pos_key(book["id"]), pos)
+            if raw.lower() in ("q", "quit"):
+                break
+            if raw.lower() in ("b", "back"):
+                pos = max(0, pos - 1)
+                db.set_setting(_pos_key(book["id"]), pos)
+                continue
+            if raw:
+                words = [w.strip() for w in raw.split(",") if w.strip()]
+                saved = [w for w in words if save_word(w, paras[pos]) is not None or True]
+                up = anki.is_available()
+                ui.blank()
+                ui.line("Saved %d word(s)%s." % (len(saved),
+                        "" if up else " (vocab only - open Anki to sync cards)"))
+                try:
+                    input(ui.INDENT + "  press Enter ")
+                except EOFError:
+                    break
+            _run_cloze(paras[pos])
+            pos += 1
+            db.set_setting(_pos_key(book["id"]), pos)
 
     if pos >= len(paras):
         ui.panel("Reading", ["You reached the end of this text. Complimenti!"])
