@@ -27,12 +27,17 @@ def home_data():
         ).fetchone()
     finally:
         conn.close()
+    from . import scoring, daily
+    prof_fraction, prof_label, _ = scoring.proficiency_beta()
+    plan = daily.build_plan()
     return {
         "name": db.get_setting("user_name", ""),
         "day": int(db.get_setting("day_count", "1")),
         "vocab_count": vocab_count,
         "attempts_total": total,
-        "accuracy": (correct / total) if total else None,   # None = no data yet
+        "prof_fraction": prof_fraction,
+        "prof_label": prof_label,
+        "plan": plan,
         "weak": weak,
         "cefr_level": asmt[0] if asmt else None,
         "cefr_assessed": (asmt[1][:10] if asmt and asmt[1] else None),

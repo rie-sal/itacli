@@ -93,17 +93,16 @@ def home(data):
     else:
         two_sided("CEFR level", "not assessed yet")
     blank()
-    acc = data.get("accuracy")
-    if acc is None:
-        two_sided("Proficiency".ljust(LABEL_W) + bar(0.0), "no attempts yet")
-    else:
-        two_sided("Proficiency".ljust(LABEL_W) + bar(acc),
-                  "%d%% recent accuracy" % round(acc * 100))
+    two_sided("Proficiency".ljust(LABEL_W) + bar(data.get("prof_fraction", 0.0)),
+              data.get("prof_label", "no data yet"))
     blank()
     justify_row("Vocabulary", ["%d words saved" % data["vocab_count"]])
     blank()
     justify_row("Focus", data["weak"] if data.get("weak") else ["nothing tracked yet"])
     blank()
+    if data.get("plan"):
+        justify_row("Plan", ["%s %d min" % p for p in data["plan"]])
+        blank()
     rule()
     blank()
     line("1  Daily session                     6  Assessment & CEFR")

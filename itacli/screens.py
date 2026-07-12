@@ -6,13 +6,8 @@ from . import ui
 
 
 def daily():
-    ui.panel("Daily session", [
-        "The adaptive session. The engine will pick today's mix from your",
-        "weakest concepts and your time budget, then run each activity in",
-        "sequence, log results, and update your Proficiency score.",
-        "",
-        "Build step: assembled after the individual pillars exist.",
-    ])
+    from . import daily as daily_pillar
+    daily_pillar.open_daily()
 
 
 def reading():
