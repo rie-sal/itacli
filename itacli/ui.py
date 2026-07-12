@@ -16,6 +16,50 @@ WIDTH = 72         # the measure (also the length of every rule)
 LABEL_W = 12       # label column; row content starts here
 BAR_WIDTH = 30     # proficiency thermometer length
 
+# Italian tricolore (only emitted to a real terminal, never into pipes/tests,
+# so the justified-layout math is never thrown off by escape codes).
+_GREEN, _WHITE, _RED, _RESET = "\033[32m", "\033[97m", "\033[31m", "\033[0m"
+
+
+def _colour_on():
+    return sys.stdout.isatty()
+
+
+def tricolore(s):
+    """Colour a string across green / white / red bands (a terminal only)."""
+    if not _colour_on() or not s:
+        return s
+    n = len(s)
+    out = []
+    for i, ch in enumerate(s):
+        band = _GREEN if i < n / 3 else (_WHITE if i < 2 * n / 3 else _RED)
+        out.append(band + ch)
+    return "".join(out) + _RESET
+
+
+_BANNER = [
+    "      _ _             _ _",
+    "     (_) |_ __ _  ___| (_)",
+    "     | | __/ _` |/ __| | |",
+    "     | | || (_| | (__| | |",
+    "     |_|\\__\\__,_|\\___|_|_|",
+]
+
+
+def banner():
+    """Print the itacli word-mark in vertical tricolore bands."""
+    w = max(len(l) for l in _BANNER)
+    on = _colour_on()
+    for line in _BANNER:
+        if not on:
+            print(INDENT + line)
+            continue
+        out = []
+        for i, ch in enumerate(line):
+            band = _GREEN if i < w / 3 else (_WHITE if i < 2 * w / 3 else _RED)
+            out.append(band + ch)
+        print(INDENT + "".join(out) + _RESET)
+
 
 def clear():
     os.system("cls" if os.name == "nt" else "clear")
@@ -46,9 +90,11 @@ def slow(text="", delay=0.018):
         print(INDENT + text)
 
 
-def two_sided(left, right):
-    """Label flush left, value flush right, filling the measure."""
-    pad = WIDTH - len(left) - len(right)
+def two_sided(left, right, pad_ref=None):
+    """Label flush left, value flush right, filling the measure. pad_ref is the
+    plain text to measure when `left` contains invisible colour codes."""
+    ref = pad_ref if pad_ref is not None else left
+    pad = WIDTH - len(ref) - len(right)
     print(INDENT + left + " " * max(1, pad) + right)
 
 
@@ -80,10 +126,11 @@ def bar(fraction):
 def home(data):
     clear()
     blank()
-    left = "ITACLI · Italian"
+    plain = "ITACLI · Italian"
     if data.get("name"):
-        left = "ITACLI · Italian   —   ciao, %s" % data["name"]
-    two_sided(left, "Day %d" % data["day"])
+        plain = "ITACLI · Italian   —   ciao, %s" % data["name"]
+    display = tricolore("ITACLI") + plain[len("ITACLI"):]
+    two_sided(display, "Day %d" % data["day"], pad_ref=plain)
     blank()
     rule()
     blank()

@@ -25,6 +25,8 @@ def detect_name():
 def run(input_fn=input):
     ui.clear()
     ui.blank()
+    ui.banner()
+    ui.blank()
     ui.slow("Benvenuto! Welcome to the world of itacli.")
     ui.blank()
     ui.slow("First - what should I call you?")
