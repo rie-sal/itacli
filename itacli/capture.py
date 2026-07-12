@@ -129,7 +129,7 @@ def _load_spacy():
     global _SPACY
     if _SPACY is None:
         import spacy
-        _SPACY = spacy.load("it_core_news_lg")
+        _SPACY = spacy.load("it_core_news_md")
     return _SPACY
 
 
@@ -160,8 +160,11 @@ def _save_vocab(term, gloss, context, anki_id):
         conn.close()
 
 
-def capture_pipeline(text):
-    """Run the full pipeline on already-captured text. Returns a summary dict."""
+def capture_pipeline(text, notify=False):
+    """Run the full pipeline on already-captured text. Returns a summary dict.
+
+    notify=True shows a translation popup (real capture only; tests pass False
+    so no GUI fires)."""
     text = (text or "").strip()
     if not text:
         return {"captured": "", "added": [], "skipped": [], "note": "empty selection"}
@@ -174,6 +177,8 @@ def capture_pipeline(text):
         note_id = anki.add_card(term, gloss) if anki_up else None
         _save_vocab(term, gloss, text, note_id)
         (added if note_id or not anki_up else skipped).append(term)
+    if notify and db.get_setting("show_popup", "1") == "1":
+        _show_translation_popup(text)
     return {
         "captured": text,
         "added": added,
@@ -182,10 +187,26 @@ def capture_pipeline(text):
     }
 
 
+def _notify(title, message):
+    """Show a macOS notification popup."""
+    t = message.replace('"', "'")
+    ti = title.replace('"', "'")
+    _run(["osascript", "-e",
+          'display notification "%s" with title "%s"' % (t, ti)])
+
+
+def _show_translation_popup(text):
+    """The 'translate popup': show the selection's translation (Apple engine)."""
+    trans = translate(text)
+    if trans:
+        snippet = text if len(text) <= 40 else text[:37] + "..."
+        _notify("itacli · translation", "%s → %s" % (snippet, trans))
+
+
 def capture_once():
     """One capture cycle (entry point for `run.py capture` / an OS binding)."""
     text = read_selection()
-    result = capture_pipeline(text)
+    result = capture_pipeline(text, notify=True)
     _report(result)
 
 
@@ -202,7 +223,7 @@ def listen():
     print("Grant Accessibility permission to your terminal if prompted.")
 
     def on_fire():
-        _report(capture_pipeline(read_selection()))
+        _report(capture_pipeline(read_selection(), notify=True))
 
     with keyboard.GlobalHotKeys({hotkey: on_fire}) as h:
         h.join()

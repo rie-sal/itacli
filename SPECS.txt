@@ -283,7 +283,11 @@ places a generative model is permitted.
        tenses, agreement, prepositions; LLM-authored lessons; weakness-driven
        concept selection; Anki custom note-type fields to mirror tags.
        ENV: install via ./install.sh (see INSTALL.md); run .venv/bin/python.
-    3. Vocab/Anki bridge [bridge DONE] + beta Proficiency score.
+    3. [DONE] Vocab/Anki bridge + beta Proficiency score (scoring.py: blend of
+       recent accuracy + vocab breadth + Anki retention, anchored to last CEFR
+       band). Adaptive Daily session (daily.py) on menu 1: weakness+budget mix.
+       Capture chunking now uses spaCy md; translate popup (macOS notification)
+       on capture; setup opens each pane/app step-by-step. Tricolore word-mark.
     4. [DONE, beta] CEFR / DIALANG-style assessment.
        assessment_items.py: curated CEFR-tagged multiple-choice bank (A1-B2,
        grammar+vocab; choices shuffled at display). assessment.py: administers

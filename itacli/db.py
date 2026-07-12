@@ -86,6 +86,7 @@ DEFAULT_SETTINGS = {
     "translate_shortcut": "itacli Translate",  # macOS Shortcut used for glosses
     "anki_deck": "itacli",
     "user_name": "",
+    "show_popup": "1",   # show a translation popup on capture
 }
 
 

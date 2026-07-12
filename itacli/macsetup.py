@@ -284,15 +284,32 @@ def run_setup(out=print, input_fn=input, open_apps=None):
 
     if open_apps is None:
         open_apps = sys.stdout.isatty()   # never auto-open in a pipe / test
-    if open_apps and _is_macos():
-        try:
-            ans = input_fn(ui.INDENT + "Open the apps/panes you need now? [y/N] ")
-        except EOFError:
-            ans = ""
-        if ans.strip().lower() in ("y", "yes"):
-            out("Opening...")
-            _open_url("x-apple.systempreferences:com.apple.preference.security"
-                      "?Privacy_Accessibility")
-            _open_app("Automator")
-            if not tr_done:
-                _open_app("Shortcuts")
+    if not (open_apps and _is_macos()):
+        return
+
+    out("")
+    out("Let's do it together - I'll open each thing when you're ready.")
+    _guided_step(input_fn, out, "grant Accessibility", lambda: _open_url(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"))
+    if not qa_done:
+        _guided_step(input_fn, out, "open Automator for the Quick Action",
+                     lambda: _open_app("Automator"))
+    _guided_step(input_fn, out, "open Keyboard shortcuts to bind %s" % pretty,
+                 lambda: _open_url("x-apple.systempreferences:"
+                                   "com.apple.Keyboard-Settings.extension"))
+    if not tr_done:
+        _guided_step(input_fn, out, "open Shortcuts to create '%s'" % tname,
+                     lambda: _open_app("Shortcuts"))
+    out("")
+    out("When the Translate Shortcut exists, verify it:  run.py test-translate ciao")
+
+
+def _guided_step(input_fn, out, label, action):
+    try:
+        ans = input_fn(ui.INDENT + "[Enter] %s   ([s] skip): " % label)
+    except EOFError:
+        return
+    if ans.strip().lower() == "s":
+        return
+    action()
+    out("  ...opened.")
