@@ -10,6 +10,7 @@ arrives with the Textual UI upgrade; the save loop underneath is identical.
 import datetime
 import os
 import re
+import shutil
 import textwrap
 import urllib.error
 import urllib.request
@@ -19,8 +20,9 @@ from . import anki, capture, db, paths, study, ui
 # Best-effort curated Italian texts. If a fetch fails, the reader falls back to
 # the bundled excerpt below, so the pillar always works offline.
 CURATED = [
-    {"id": "24686", "title": "Le avventure di Pinocchio", "author": "Carlo Collodi"},
+    {"id": "19517", "title": "Le avventure di Pinocchio", "author": "Carlo Collodi"},
     {"id": "45334", "title": "I promessi sposi", "author": "Alessandro Manzoni"},
+    {"id": "997", "title": "La Divina Commedia: Inferno", "author": "Dante Alighieri"},
 ]
 
 SAMPLE = {
@@ -50,13 +52,14 @@ _URL_PATTERNS = [
 
 
 def _strip_gutenberg(text):
-    """Drop the Project Gutenberg license header/footer if present."""
-    start = text.find("*** START OF")
-    if start != -1:
-        text = text[text.find("\n", start) + 1:]
-    end = text.find("*** END OF")
-    if end != -1:
-        text = text[:end]
+    """Drop the Project Gutenberg license header/footer (handles both the
+    '*** START OF' and older '***START OF' marker formats)."""
+    starts = list(re.finditer(r"\*\*\* *START OF .*?\*\*\*", text, re.I))
+    if starts:
+        text = text[starts[-1].end():]
+    end = re.search(r"\*\*\* *END OF .*?\*\*\*", text, re.I)
+    if end:
+        text = text[:end.start()]
     return text.strip()
 
 
@@ -82,12 +85,47 @@ def fetch_book(book_id):
     raise RuntimeError("Could not fetch Gutenberg #%s (%s)" % (book_id, last))
 
 
-def _paragraphs(text):
-    return [p.strip() for p in text.split("\n\n") if p.strip()]
+def _display_lines(text):
+    """Wrap the whole text to the measure, preserving paragraph breaks, into a
+    flat list of display lines we can paginate."""
+    lines = []
+    for para in text.split("\n\n"):
+        para = para.strip()
+        if not para:
+            continue
+        lines.extend(textwrap.wrap(para, ui.WIDTH) or [""])
+        lines.append("")   # blank line between paragraphs
+    while lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
 
-def _pos_key(book_id):
-    return "read_pos_%s" % book_id
+def _page_height():
+    """How many text lines fit a page, after header/rule/footer chrome."""
+    rows = shutil.get_terminal_size((80, 24)).lines
+    return max(6, rows - 9)
+
+
+def _line_key(book_id):
+    return "read_line_%s" % book_id
+
+
+def _total_key(book_id):
+    return "read_total_%s" % book_id
+
+
+def _progress_pct(book_id):
+    """Saved reading progress as a percent, or None if never opened."""
+    total = int(db.get_setting(_total_key(book_id), "0"))
+    if total <= 0:
+        return None
+    pos = int(db.get_setting(_line_key(book_id), "0"))
+    return min(100, int(pos / total * 100))
+
+
+def _pct_suffix(book_id):
+    pct = _progress_pct(book_id)
+    return "   (%d%%)" % pct if pct is not None else ""
 
 
 def save_word(term, context):
@@ -180,52 +218,69 @@ def _read_book(book):
             ui.panel("Reading", [str(e), "", "Falling back to the bundled excerpt."])
             book = SAMPLE
             text = SAMPLE["text"]
-    paras = _paragraphs(text)
-    pos = int(db.get_setting(_pos_key(book["id"]), "0"))
+    bid = book["id"]
+    lines = _display_lines(text)
+    total = len(lines)
+    db.set_setting(_total_key(bid), total)
+    pos = int(db.get_setting(_line_key(bid), "0"))
+    if pos >= total:          # finished last time -> start over
+        pos = 0
 
     with study.Timer():
-        while pos < len(paras):
+        while 0 <= pos < total:
+            ph = _page_height()
+            page = lines[pos:pos + ph]
+            pct = int(min(pos + ph, total) / total * 100)
             ui.clear()
             ui.blank()
-            ui.two_sided(book["title"], "%d / %d" % (pos + 1, len(paras)))
+            ui.two_sided(book["title"], "%d%%" % pct)
             ui.blank()
             ui.rule()
             ui.blank()
-            for wline in textwrap.wrap(paras[pos], ui.WIDTH):
+            for wline in page:
                 ui.line(wline)
             ui.blank()
             ui.rule()
-            ui.blank()
-            ui.line("Type unknown words (comma-separated) to save them,")
-            ui.line("Enter to continue, b = back, q = quit reading.")
+            ui.line("[Enter] next  ·  [b] back  ·  [s] save word(s)  ·  "
+                    "[c] check  ·  [q] quit")
             ui.blank()
             try:
-                raw = input(ui.INDENT + "> ").strip()
+                raw = input(ui.INDENT + "> ").strip().lower()
             except EOFError:
                 break
-            if raw.lower() in ("q", "quit"):
+            if raw in ("q", "quit"):
                 break
-            if raw.lower() in ("b", "back"):
-                pos = max(0, pos - 1)
-                db.set_setting(_pos_key(book["id"]), pos)
-                continue
-            if raw:
-                words = [w.strip() for w in raw.split(",") if w.strip()]
-                saved = [w for w in words if save_word(w, paras[pos]) is not None or True]
-                up = anki.is_available()
-                ui.blank()
-                ui.line("Saved %d word(s)%s." % (len(saved),
-                        "" if up else " (vocab only - open Anki to sync cards)"))
-                try:
-                    input(ui.INDENT + "  press Enter ")
-                except EOFError:
-                    break
-            _run_cloze(paras[pos])
-            pos += 1
-            db.set_setting(_pos_key(book["id"]), pos)
+            if raw in ("b", "back"):
+                pos = max(0, pos - ph)
+            elif raw == "s":
+                _save_from_page("\n".join(page))
+            elif raw == "c":
+                _run_cloze(" ".join(page))
+            else:
+                pos += ph
+            db.set_setting(_line_key(bid), min(pos, total))
 
-    if pos >= len(paras):
+    if pos >= total:
         ui.panel("Reading", ["You reached the end of this text. Complimenti!"])
+
+
+def _save_from_page(page_text):
+    try:
+        raw = input(ui.INDENT + "  words to save (comma-separated): ").strip()
+    except EOFError:
+        return
+    words = [w.strip() for w in raw.split(",") if w.strip()]
+    if not words:
+        return
+    for w in words:
+        save_word(w, page_text)
+    up = anki.is_available()
+    ui.line("  saved %d word(s)%s." % (
+        len(words), "" if up else " (vocab only - open Anki to sync cards)"))
+    try:
+        input(ui.INDENT + "  press Enter ")
+    except EOFError:
+        return
 
 
 def _read_mediawiki(kind, fetch):
@@ -293,9 +348,11 @@ def open_reading():
         ui.blank()
         ui.rule()
         ui.blank()
-        ui.line("0  Bundled excerpt (offline) - %s" % SAMPLE["title"])
+        ui.line("0  Bundled excerpt (offline) - %s%s"
+                % (SAMPLE["title"], _pct_suffix("sample")))
         for i, b in enumerate(CURATED, start=1):
-            ui.line("%d  %s - %s  (Gutenberg #%s)" % (i, b["title"], b["author"], b["id"]))
+            ui.line("%d  %s - %s%s"
+                    % (i, b["title"], b["author"], _pct_suffix(b["id"])))
         ui.line("g  Enter any Project Gutenberg ID")
         ui.line("w  Wikisource (enter a title)")
         ui.line("p  Wikipedia (enter a title)")
