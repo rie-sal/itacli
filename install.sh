@@ -16,9 +16,10 @@ echo "==> Installing spaCy + mlconjug3 (this pulls numpy/scikit-learn; a few min
 echo "==> Downloading the Italian model (~40MB)"
 .venv/bin/python -m spacy download it_core_news_md
 
+echo "==> Installing the 'itacli' launcher"
+.venv/bin/python run.py install-launcher
+
 echo
-echo "Done. Start itacli with:"
-echo "    .venv/bin/python run.py"
-echo
-echo "For an isolated data dir (recommended for a clean test):"
-echo "    ITACLI_DATA_DIR=\"\$HOME/itacli-data\" .venv/bin/python run.py"
+echo "Done. If your shell PATH was just updated, open a new terminal, then:"
+echo "    itacli"
+echo "(or run in place:  .venv/bin/python run.py )"

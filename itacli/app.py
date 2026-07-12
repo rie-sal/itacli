@@ -77,6 +77,32 @@ def main(argv=None):
             return
         if cmd == "add":
             return _quick_add(rest)
+        if cmd == "install-launcher":
+            from . import launcher
+            path, on_path = launcher.install_launcher()
+            print("Installed launcher: %s" % path)
+            if on_path:
+                print("Run the app any time by typing:  itacli")
+            else:
+                print("Added ~/.local/bin to PATH in your shell profile.")
+                print("Open a new terminal (or `source ~/.zshrc`), then: itacli")
+            return
+        if cmd == "test-translate":
+            from . import capture, db as _db
+            word = rest[0] if rest else "ciao"
+            name = _db.get_setting("translate_shortcut", "")
+            installed = name in capture._installed_shortcuts()
+            print("Translate Shortcut: %r  (installed: %s)" % (name, installed))
+            result = capture.translate(word)
+            if result:
+                print("  %s -> %s   ✓ translation works" % (word, result))
+            elif not installed:
+                print("  Shortcut not found. Create it in Shortcuts.app (see"
+                      " `run.py setup`), then retry.")
+            else:
+                print("  No output - check the Shortcut has a Translate Text"
+                      " action with input = Shortcut Input.")
+            return
         print("Unknown command: %s" % cmd)
         return
 

@@ -42,8 +42,16 @@ mlconjug3. Nothing touches your system Python.
 
 ## 3. Run
 
+The installer adds an `itacli` launcher to your PATH, so after opening a new
+terminal you can just type:
+
 ```bash
-# fresh, isolated data dir so it behaves like a first-time user:
+itacli
+```
+
+Or run in place (no launcher needed):
+
+```bash
 ITACLI_DATA_DIR="$HOME/itacli-data" .venv/bin/python run.py
 ```
 

@@ -266,9 +266,19 @@ def run_setup(out=print, input_fn=input, open_apps=None):
         "2. Install the Quick Action: double-click the bundle above (or let me",
         "   copy it to ~/Library/Services), then bind %s under" % pretty,
         "   System Settings > Keyboard > Keyboard Shortcuts > Services.",
-        "3. Translate Shortcut '%s': Translate Text (Italian>English)," % tname,
-        "   input = Shortcut Input, then Stop and output > Translated Text.",
+        "3. Translate Shortcut - in Shortcuts.app, New Shortcut named '%s':" % tname,
+        "     - Add action 'Translate Text'; set language from Italian to",
+        "       English; tap the text field and choose 'Shortcut Input'.",
+        "     - The shortcut auto-returns the last result (no extra action).",
+        "     - In the shortcut's (i) details, set 'Receive' = Text.",
+        "   Then run it once online so macOS downloads the Italian model.",
+        "   Verify it works:   run.py test-translate ciao",
         "   (Optional - cards are still created without it.)",
+        "",
+        "Note: the Anki deck '%s' is created automatically the first time"
+        % db.get_setting("anki_deck", "itacli"),
+        "itacli adds a card (needs Anki open with AnkiConnect) - not by the",
+        "Shortcut. The Shortcut only produces the translation.",
     ]:
         out(line)
 
