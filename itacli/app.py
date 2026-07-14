@@ -74,6 +74,11 @@ def main(argv=None):
             paths.reset_to_onboarding()
             print("Reset. The next launch will start onboarding a new user.")
             return
+        if cmd == "install-ankiconnect":
+            from . import ankisetup
+            ok, msg = ankisetup.install_ankiconnect()
+            print(msg)
+            return
         if cmd == "anki-check":
             from . import anki, sync
             if anki.is_available():

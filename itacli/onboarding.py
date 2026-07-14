@@ -69,8 +69,8 @@ def _anki_step(input_fn):
             return True
         ui.blank()
         try:
-            c = input_fn(ui.INDENT + "[Enter] re-check  ·  [o] open Anki again  "
-                         "·  [s] skip (not recommended): ").strip().lower()
+            c = input_fn(ui.INDENT + "[Enter] re-check  ·  [i] install AnkiConnect "
+                         "for me  ·  [o] open Anki  ·  [s] skip: ").strip().lower()
         except EOFError:
             return False
         if c == "s":
@@ -80,6 +80,15 @@ def _anki_step(input_fn):
             return False
         if c == "o":
             _open(["open", "-a", "Anki"])
+        if c == "i":
+            from . import ankisetup
+            ui.line("  downloading + installing AnkiConnect...")
+            ok, msg = ankisetup.install_ankiconnect()
+            ui.line("  " + msg)
+            if ok:
+                _open(["osascript", "-e", 'tell application "Anki" to quit'])
+                _open(["open", "-a", "Anki"])
+                ui.line("  restarting Anki - wait a few seconds, then press Enter.")
 
 
 def run(input_fn=input):
