@@ -37,27 +37,49 @@ def _popup(message):
             pass
 
 
+def _open(args):
+    if sys.platform == "darwin" and sys.stdout.isatty():
+        try:
+            subprocess.run(args, capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
 def _anki_step(input_fn):
+    deck = db.get_setting("anki_deck", "itacli")
     ui.blank()
     ui.rule()
     ui.blank()
-    ui.line("Anki - where your flashcards live.")
-    deck = db.get_setting("anki_deck", "itacli")
-    if anki.is_available():
+    ui.line("Anki - your flashcards live here, so itacli must connect to it.")
+    ui.line("Opening Anki and the AnkiConnect add-on page for you...")
+    _open(["open", "-a", "Anki"])
+    _open(["open", "https://ankiweb.net/shared/info/2055492159"])
+    ui.blank()
+    ui.line("In Anki:  Tools > Add-ons > Get Add-ons > paste  2055492159  > OK,")
+    ui.line("then restart Anki. (I can't click inside Anki, but that's the step.)")
+    while True:
+        if anki.is_available():
+            try:
+                anki.ensure_deck(deck)
+            except Exception:
+                pass
+            ui.blank()
+            ui.line("Connected to Anki - created your deck '%s'!" % deck)
+            _popup("itacli is connected to Anki and created your deck '%s'." % deck)
+            return True
+        ui.blank()
         try:
-            anki.ensure_deck(deck)
-            ui.line("Connected to Anki - created your deck '%s'." % deck)
-            _popup("Connected to Anki and created your deck '%s'." % deck)
-        except Exception:
-            ui.line("Anki is open but the deck couldn't be created - check AnkiConnect.")
-    else:
-        ui.line("Anki isn't reachable yet. To make your cards sync:")
-        ui.line("  1. Install Anki (apps.ankiweb.net) and open it.")
-        ui.line("  2. Add the AnkiConnect add-on (code 2055492159), restart Anki.")
-        ui.line("Until then, saved words queue up and sync automatically.")
-        _popup("Anki isn't running yet. Open Anki with the AnkiConnect add-on "
-               "and your saved words will sync - itacli will create the deck '%s'."
-               % deck)
+            c = input_fn(ui.INDENT + "[Enter] re-check  ·  [o] open Anki again  "
+                         "·  [s] skip (not recommended): ").strip().lower()
+        except EOFError:
+            return False
+        if c == "s":
+            ui.line("Skipped. Saved words queue and sync once Anki + AnkiConnect run.")
+            _popup("Anki isn't connected yet - saved words will queue and sync "
+                   "once you finish AnkiConnect setup.")
+            return False
+        if c == "o":
+            _open(["open", "-a", "Anki"])
 
 
 def run(input_fn=input):

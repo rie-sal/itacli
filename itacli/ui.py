@@ -130,7 +130,8 @@ def home(data):
     if data.get("name"):
         plain = "ITACLI · Italian   —   ciao, %s" % data["name"]
     display = tricolore("ITACLI") + plain[len("ITACLI"):]
-    two_sided(display, "Day %d" % data["day"], pad_ref=plain)
+    right = "Day %d  ·  %d min today" % (data["day"], data.get("time_budget", 30))
+    two_sided(display, right, pad_ref=plain)
     blank()
     rule()
     blank()
@@ -153,9 +154,9 @@ def home(data):
     rule()
     blank()
     line("1  Daily session                     6  Assessment & CEFR")
-    line("2  Reading                           7  Progress & statistics")
-    line("3  Grammar                           8  Content library")
-    line("4  Vocabulary (Anki)                 9  Settings")
+    line("2  Reading & library                 7  Progress & statistics")
+    line("3  Grammar                           9  Settings")
+    line("4  Vocabulary (Anki)                 t  Set daily time")
     line("5  Listening                         q  Quit")
     blank()
     rule()

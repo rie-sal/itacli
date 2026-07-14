@@ -78,25 +78,11 @@ def _run_activity(name):
 
 
 def open_daily():
-    default_b = int(float(db.get_setting("time_budget_min", "30")))
-    ui.clear()
-    ui.blank()
-    ui.line("Daily session")
-    ui.blank()
-    ui.rule()
-    ui.blank()
-    try:
-        raw = input(ui.INDENT + "How many minutes do you have today? [%d]: "
-                    % default_b).strip()
-    except EOFError:
-        raw = ""
-    budget = int(raw) if raw.isdigit() and int(raw) > 0 else default_b
-    db.set_setting("time_budget_min", str(budget))
+    budget = int(float(db.get_setting("time_budget_min", "30")))
     plan = build_plan(budget)
-
     ui.clear()
     ui.blank()
-    ui.two_sided("Daily session", "%d min budget" % budget)
+    ui.two_sided("Daily session", "%d min budget  (set with 't' on home)" % budget)
     ui.blank()
     ui.rule()
     ui.blank()

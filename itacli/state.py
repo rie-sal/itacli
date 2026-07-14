@@ -33,6 +33,7 @@ def home_data():
     return {
         "name": db.get_setting("user_name", ""),
         "day": int(db.get_setting("day_count", "1")),
+        "time_budget": int(float(db.get_setting("time_budget_min", "30"))),
         "vocab_count": vocab_count,
         "attempts_total": total,
         "prof_fraction": prof_fraction,

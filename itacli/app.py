@@ -17,9 +17,18 @@ MENU = {
     "5": screens.listening,
     "6": screens.assessment,
     "7": screens.progress,
-    "8": screens.library,
     "9": screens.settings,
 }
+
+
+def _set_time():
+    cur = int(float(db.get_setting("time_budget_min", "30")))
+    try:
+        raw = input(ui.INDENT + "Minutes you have today [%d]: " % cur).strip()
+    except EOFError:
+        return
+    if raw.isdigit() and int(raw) > 0:
+        db.set_setting("time_budget_min", str(int(raw)))
 
 
 def _quick_add(args):
@@ -45,6 +54,9 @@ def menu_loop():
             break
         if choice in ("q", "quit", "exit"):
             break
+        if choice == "t":
+            _set_time()
+            continue
         action = MENU.get(choice)
         if action:
             action()

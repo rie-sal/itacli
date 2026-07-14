@@ -63,6 +63,17 @@ def _strip_gutenberg(text):
     return text.strip()
 
 
+_AUDIO_MARKERS = ("librivox", "audio reading", "audiobook", "audio recording",
+                  "public domain certification", "this recording is in the public")
+
+
+def _looks_like_audiobook(text):
+    """True for a short LibriVox/audiobook companion blurb (not a real book)."""
+    head = text[:1500].lower()
+    has_marker = any(m in head for m in _AUDIO_MARKERS)
+    return has_marker and len(text) < 8000
+
+
 def fetch_book(book_id):
     """Return the book text, caching to content_cache/. Raises on failure."""
     cached = os.path.join(paths.content_cache(), "%s.txt" % book_id)
@@ -77,6 +88,10 @@ def fetch_book(book_id):
             with urllib.request.urlopen(req, timeout=10) as resp:
                 raw = resp.read().decode("utf-8", "replace")
             text = _strip_gutenberg(raw)
+            if _looks_like_audiobook(text):
+                raise RuntimeError(
+                    "That entry is an audiobook companion blurb, not a readable "
+                    "book - skipping. (It may work as a Listening source later.)")
             with open(cached, "w", encoding="utf-8") as f:
                 f.write(text)
             return text
@@ -346,25 +361,114 @@ def _read_reddit():
                 "author": "Reddit", "text": text})
 
 
+def _add_gutenberg_flow(library, rel):
+    ui.blank()
+    for j, b in enumerate(CURATED, start=1):
+        ui.line("  s%d  %s - %s" % (j, b["title"], b["author"]))
+    ui.line("  or type a Gutenberg ID / search terms")
+    try:
+        q = input(ui.INDENT + "  > ").strip()
+    except EOFError:
+        return
+    if not q:
+        return
+    book_id, title = None, None
+    if q.lower().startswith("s") and q[1:].isdigit() and 1 <= int(q[1:]) <= len(CURATED):
+        b = CURATED[int(q[1:]) - 1]
+        book_id, title = b["id"], b["title"]
+    elif q.isdigit():
+        book_id = q
+    else:
+        try:
+            results = library.search_gutenberg(q)
+        except RuntimeError as e:
+            ui.panel("Add text", [str(e)])
+            return
+        if not results:
+            ui.panel("Add text", ["No Italian results."])
+            return
+        ui.blank()
+        for i, r in enumerate(results, 1):
+            ui.line("  %d  %s - %s  (#%s)" % (i, r["title"][:40], r["author"][:20], r["id"]))
+        try:
+            pick = input(ui.INDENT + "  download which? ").strip()
+        except EOFError:
+            return
+        if pick.isdigit() and 1 <= int(pick) <= len(results):
+            book_id, title = results[int(pick) - 1]["id"], results[int(pick) - 1]["title"]
+    if not book_id:
+        return
+    ui.line("  downloading #%s ..." % book_id)
+    try:
+        library.add_gutenberg(book_id, title, rel)
+        ui.line("  added.")
+    except Exception as e:
+        ui.line("  couldn't add: %s" % e)
+    try:
+        input(ui.INDENT + "  press Enter ")
+    except EOFError:
+        pass
+
+
+def _organize_flow(library, rel, files):
+    ui.blank()
+    ui.line("  organize: [mkdir NAME] [rename N NEWNAME] [move N FOLDER] [q]")
+    try:
+        cmd = input(ui.INDENT + "  > ").strip()
+    except EOFError:
+        return
+    parts = cmd.split()
+    if not parts or parts[0].lower() == "q":
+        return
+    op = parts[0].lower()
+    try:
+        if op == "mkdir" and len(parts) >= 2:
+            library.mkdir(rel, " ".join(parts[1:]))
+        elif op == "rename" and len(parts) >= 3 and parts[1].isdigit():
+            library.rename(rel, files[int(parts[1]) - 1], " ".join(parts[2:]))
+        elif op == "move" and len(parts) >= 3 and parts[1].isdigit():
+            library.move(rel, files[int(parts[1]) - 1], parts[2])
+        else:
+            ui.line("  didn't understand that.")
+    except (IndexError, OSError) as e:
+        ui.line("  error: %s" % e)
+
+
 def open_reading():
-    """Menu entry: pick from your library or a web source, then read."""
+    """Browse your library (with sub-folders) or a web source, then read."""
     from . import library
+    rel = ""
     while True:
-        mine = library.items()
+        dirs, files = library.list_dir(rel)
         ui.clear()
         ui.blank()
-        ui.line("Reading - choose a text")
+        ui.two_sided("Reading & library", "/" + rel if rel else "/")
         ui.blank()
         ui.rule()
         ui.blank()
-        ui.line("0  Bundled excerpt (offline) - %s%s"
-                % (SAMPLE["title"], _pct_suffix("sample")))
-        for i, it in enumerate(mine, start=1):
-            ui.line("%d  %s%s" % (i, it["title"], _pct_suffix(it["id"])))
-        if not mine:
-            ui.line("   (library empty - add texts in Content library, menu 8)")
+        entries = []                         # index -> ("sample"|"dir"|"file", value)
+        if rel:
+            ui.line("0  .. (up a folder)")
+        n = 1
+        if not rel:
+            ui.line("%d  %s%s  (bundled)" % (n, SAMPLE["title"], _pct_suffix("sample")))
+            entries.append(("sample", None))
+            n += 1
+        for d in dirs:
+            ui.line("%d  %s/" % (n, d))
+            entries.append(("dir", d))
+            n += 1
+        for f in files:
+            ui.line("%d  %s%s" % (n, library._title_from(f),
+                                  _pct_suffix(library.item_id(rel, f))))
+            entries.append(("file", f))
+            n += 1
+        if not files and not dirs and rel:
+            ui.line("   (empty folder)")
         ui.blank()
-        ui.line("w Wikisource   p Wikipedia   r Reddit   g Gutenberg ID   q Back")
+        ui.line("web:   w Wikisource   p Wikipedia   r Reddit   g Gutenberg ID")
+        ui.line("files: a add-text   d delete N   o open folder in Finder   m organize")
+        ui.line("q back      folder: %s" % library._abs(rel))
         ui.blank()
         ui.rule()
         ui.blank()
@@ -374,22 +478,38 @@ def open_reading():
             return
         if choice in ("q", ""):
             return
-        if choice == "0":
-            _read_book(SAMPLE)
-        elif choice == "g":
-            try:
-                bid = input(ui.INDENT + "Gutenberg ID: ").strip()
-            except EOFError:
-                return
-            if bid:
-                _read_book({"id": bid, "title": "Gutenberg #%s" % bid, "author": ""})
+        if choice == "0" and rel:
+            rel = os.path.dirname(rel)
         elif choice == "w":
             _read_wikisource()
         elif choice == "p":
             _read_wikipedia()
         elif choice == "r":
             _read_reddit()
-        elif choice.isdigit() and 1 <= int(choice) <= len(mine):
-            it = mine[int(choice) - 1]
-            _read_book({"id": it["id"], "title": it["title"],
-                        "text": library.load_text(it["file"])})
+        elif choice == "g":
+            try:
+                bid = input(ui.INDENT + "Gutenberg ID: ").strip()
+            except EOFError:
+                continue
+            if bid:
+                _read_book({"id": bid, "title": "Gutenberg #%s" % bid, "author": ""})
+        elif choice == "a":
+            _add_gutenberg_flow(library, rel)
+        elif choice == "o":
+            library.open_in_finder(rel)
+        elif choice == "m":
+            _organize_flow(library, rel, files)
+        elif choice.startswith("d") and choice[1:].strip().isdigit():
+            k = int(choice[1:].strip()) - 1
+            if 0 <= k < len(entries) and entries[k][0] == "file":
+                library.delete(rel, entries[k][1])
+        elif choice.isdigit() and 1 <= int(choice) <= len(entries):
+            kind, val = entries[int(choice) - 1]
+            if kind == "sample":
+                _read_book(SAMPLE)
+            elif kind == "dir":
+                rel = os.path.join(rel, val) if rel else val
+            else:
+                _read_book({"id": library.item_id(rel, val),
+                            "title": library._title_from(val),
+                            "text": library.load_text(rel, val)})
