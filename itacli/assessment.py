@@ -1,9 +1,10 @@
 """CEFR assessment (SPECS §9): closed-form, auto-graded, no speaking.
 
-Administers CEFR-tagged items level by level and estimates a band as the
-highest contiguous level the user passes. Directional but honest. Separate
-from the continuous Proficiency score (§8). Spaced by time studied (study.py),
-but always available on demand.
+Administers CEFR-tagged items and estimates a band as the highest contiguous
+level passed. Answers can be MULTIPLE-CHOICE or FREE-RESPONSE (toggle while
+answering); "I don't know" is always an option (recorded honestly, not a
+guess). Every grammar item's result is logged to `attempts` so it feeds
+concept mastery (concepts.py) and the Proficiency score (scoring.py).
 """
 import datetime
 import random
@@ -14,33 +15,58 @@ from . import db, study, ui
 PASS = 0.6   # fraction correct to "pass" a level
 
 
-def _ask(item, index, total):
-    choices = list(item["choices"])
-    random.shuffle(choices)   # so the answer isn't always in the same slot
+def _norm(s):
+    return s.strip().lower().strip(".,;:!?\"'()[]«»…")
+
+
+def _ask(item, index, total, mode):
     ui.clear()
     ui.blank()
-    ui.two_sided("CEFR assessment", "%d / %d" % (index, total))
+    ui.two_sided("CEFR assessment (%s)" % ("multiple choice" if mode == "mc"
+                                           else "free response"),
+                 "%d / %d" % (index, total))
     ui.blank()
     ui.rule()
     ui.blank()
     ui.line(item["q"])
     ui.blank()
-    for i, choice in enumerate(choices, start=1):
-        ui.line("  %d  %s" % (i, choice))
-    ui.blank()
-    try:
-        raw = input(ui.INDENT + "  answer (number, or q to stop): ").strip().lower()
-    except EOFError:
-        return None
-    if raw in ("q", "quit"):
-        return None
-    if raw.isdigit() and 1 <= int(raw) <= len(choices):
-        return choices[int(raw) - 1] == item["answer"]
-    return False   # unparseable = wrong
+    if mode == "mc":
+        choices = list(item["choices"])
+        random.shuffle(choices)
+        for i, c in enumerate(choices, start=1):
+            ui.line("  %d  %s" % (i, c))
+        ui.blank()
+        ui.line("[number] answer · [d] don't know · [f] free-response · [q] stop")
+        try:
+            raw = input(ui.INDENT + "  > ").strip().lower()
+        except EOFError:
+            return None, "stop"
+        if raw in ("q", "quit"):
+            return None, "stop"
+        if raw == "f":
+            return None, "toggle"
+        if raw == "d":
+            return False, "answer"
+        if raw.isdigit() and 1 <= int(raw) <= len(choices):
+            return choices[int(raw) - 1] == item["answer"], "answer"
+        return False, "answer"
+    else:
+        ui.line("[type answer] · [d] don't know · [c] multiple-choice · [q] stop")
+        try:
+            raw = input(ui.INDENT + "  = ").strip()
+        except EOFError:
+            return None, "stop"
+        low = raw.lower()
+        if low in ("q", "quit"):
+            return None, "stop"
+        if low == "c":
+            return None, "toggle"
+        if low == "d" or not raw:
+            return False, "answer"
+        return _norm(raw) == _norm(item["answer"]), "answer"
 
 
 def _estimate(level_scores):
-    """Highest contiguous level with accuracy >= PASS. None if A1 not passed."""
     passed = None
     for lvl in bank.LEVELS:
         total, correct = level_scores.get(lvl, (0, 0))
@@ -49,6 +75,23 @@ def _estimate(level_scores):
         else:
             break
     return passed
+
+
+def _log_item(item, correct):
+    """Feed each grammar item into attempts -> concept mastery + proficiency."""
+    concept = bank.CONCEPT_BY_ID.get(item["id"])
+    tag = "grammar:%s" % concept if concept else "cefr:%s" % item["skill"]
+    conn = db.connect()
+    try:
+        conn.execute(
+            "INSERT INTO attempts(content_item_id, correct, timestamp, concept_tags) "
+            "VALUES (NULL, ?, ?, ?)",
+            (1 if correct else 0,
+             datetime.datetime.now().isoformat(timespec="seconds"), tag),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _store(overall, per_skill, item_ids):
@@ -71,28 +114,36 @@ def _store(overall, per_skill, item_ids):
 
 def open_assessment():
     items = bank.ITEMS
-    level_scores = {lvl: [0, 0] for lvl in bank.LEVELS}      # [total, correct]
+    level_scores = {lvl: [0, 0] for lvl in bank.LEVELS}
     skill_scores = {}
     asked_ids = []
+    mode = db.get_setting("assessment_mode", "mc")
 
-    for idx, item in enumerate(items, start=1):
-        result = _ask(item, idx, len(items))
-        if result is None:
-            ui.panel("CEFR assessment", ["Stopped early - no score recorded.",
-                                         "Run it again when you have a few minutes."])
-            return
-        asked_ids.append(item["id"])
-        level_scores[item["cefr"]][0] += 1
-        level_scores[item["cefr"]][1] += int(result)
-        s = skill_scores.setdefault(item["skill"], [0, 0])
-        s[0] += 1
-        s[1] += int(result)
+    with study.Timer():
+        for idx, item in enumerate(items, start=1):
+            while True:
+                result, action = _ask(item, idx, len(items), mode)
+                if action == "stop":
+                    ui.panel("CEFR assessment", [
+                        "Stopped early - no score recorded.",
+                        "Run it again when you have a few minutes."])
+                    return
+                if action == "toggle":
+                    mode = "free" if mode == "mc" else "mc"
+                    db.set_setting("assessment_mode", mode)
+                    continue
+                break
+            asked_ids.append(item["id"])
+            level_scores[item["cefr"]][0] += 1
+            level_scores[item["cefr"]][1] += int(result)
+            s = skill_scores.setdefault(item["skill"], [0, 0])
+            s[0] += 1
+            s[1] += int(result)
+            _log_item(item, result)
 
     ls = {lvl: (t, c) for lvl, (t, c) in level_scores.items()}
     overall = _estimate(ls) or "pre-A1"
-    per_skill = {}
-    for skill, (t, c) in skill_scores.items():
-        per_skill[skill] = _estimate_from_ratio(skill, ls, overall)
+    per_skill = {sk: (_estimate(ls) or "A1<") for sk in skill_scores}
     _store(overall if overall != "pre-A1" else "A1<", per_skill, asked_ids)
 
     lines = ["Your estimated CEFR level:  %s" % overall, ""]
@@ -100,14 +151,9 @@ def open_assessment():
         t, c = ls[lvl]
         if t:
             lines.append("  %s   %d / %d correct" % (lvl, c, t))
-    lines += ["", "This is a directional estimate from closed-form items -",
-              "no speaking. It updates each time you take it."]
+    lines += ["", "Mistakes now feed your grammar concept tracker (menu 7)",
+              "and your Proficiency score. Take it again anytime."]
     ui.panel("CEFR assessment - done", lines)
-
-
-def _estimate_from_ratio(skill, level_scores, overall):
-    """Per-skill band: reuse the overall estimate for now (beta)."""
-    return overall if overall != "pre-A1" else "A1<"
 
 
 def cadence_note():

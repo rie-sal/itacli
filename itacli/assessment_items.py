@@ -70,6 +70,17 @@ ITEMS = [
      "answer": "buona fortuna"},
 ]
 
+# Which grammar concept each item exercises (for concept-mastery tracking).
+# Items not listed are vocabulary items.
+CONCEPT_BY_ID = {
+    "a1-1": "articles", "a1-3": "noun-plural", "a1-5": "present-tense",
+    "a2-1": "passato-prossimo", "a2-2": "present-tense", "a2-4": "prepositions",
+    "a2-5": "comparatives", "b1-1": "congiuntivo", "b1-2": "imperfetto",
+    "b1-4": "pronouns", "b1-5": "conditional",
+    "b2-1": "congiuntivo-imperfetto", "b2-3": "passive",
+    "b2-4": "congiuntivo-imperfetto",
+}
+
 LEVELS = ["A1", "A2", "B1", "B2"]
 
 

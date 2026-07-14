@@ -188,11 +188,12 @@ def capture_pipeline(text, notify=False):
 
 
 def _notify(title, message):
-    """Show a macOS notification popup."""
+    """Show a floating macOS dialog (auto-dismisses) with the translation."""
     t = message.replace('"', "'")
     ti = title.replace('"', "'")
     _run(["osascript", "-e",
-          'display notification "%s" with title "%s"' % (t, ti)])
+          'display dialog "%s" with title "%s" buttons {"OK"} '
+          'default button "OK" giving up after 8 with icon note' % (t, ti)])
 
 
 def _show_translation_popup(text):

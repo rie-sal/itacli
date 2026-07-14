@@ -66,12 +66,46 @@ def assessment():
 
 
 def progress():
-    ui.panel("Progress & statistics", [
-        "CEFR trend, the between-levels thermometer, concept-mastery heatmap,",
-        "vocabulary growth, and time-on-task.",
-        "",
-        "Build step: grows alongside scoring and assessments.",
-    ])
+    from . import concepts, scoring, study, db
+    ui.clear()
+    ui.blank()
+    ui.line("Progress & statistics")
+    ui.blank()
+    ui.rule()
+    ui.blank()
+
+    conn = db.connect()
+    try:
+        vocab = conn.execute("SELECT COUNT(*) FROM vocab").fetchone()[0]
+        n_assess = conn.execute("SELECT COUNT(*) FROM assessments").fetchone()[0]
+        last = conn.execute(
+            "SELECT cefr_overall FROM assessments ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+    frac, label, _ = scoring.proficiency_beta()
+
+    ui.two_sided("CEFR level", (last[0] if last else "not assessed yet"))
+    ui.two_sided("Proficiency", label)
+    ui.two_sided("Assessments taken", str(n_assess))
+    ui.two_sided("Vocabulary", "%d words" % vocab)
+    ui.two_sided("Time studied", "%d min" % int(study.total_minutes()))
+    ui.blank()
+    ui.line("Grammar concepts  ( [x] mastered  [~] learning  [ ] not started )")
+    ui.blank()
+    for m in concepts.mastery():
+        mark = {"mastered": "x", "learning": "~", "not started": " "}[m["status"]]
+        acc = "%3d%%" % round(m["accuracy"] * 100) if m["accuracy"] is not None else "  -"
+        ui.line("  [%s] %-24s %-3s  %s  (%d tries)"
+                % (mark, m["name"], m["cefr"], acc, m["total"]))
+    ui.blank()
+    ui.rule()
+    ui.blank()
+    ui.line("Weak concepts show up more in Grammar (menu 3) until mastered.")
+    try:
+        input(ui.INDENT + "  press Enter ")
+    except EOFError:
+        return
 
 
 def library():

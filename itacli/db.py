@@ -87,6 +87,7 @@ DEFAULT_SETTINGS = {
     "anki_deck": "itacli",
     "user_name": "",
     "show_popup": "1",   # show a translation popup on capture
+    "assessment_mode": "mc",   # mc | free (toggle while answering)
 }
 
 

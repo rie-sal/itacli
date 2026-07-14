@@ -8,7 +8,11 @@ the engine to draw on.
 import datetime
 import random
 
-from . import db, study, templates, ui
+from . import concepts, db, study, templates, ui
+
+# Which catalogue concept each drill template trains.
+TEMPLATE_KEY = {"def-art": "articles", "indef-art": "articles",
+                "plural": "noun-plural", "present": "present-tense"}
 
 MIN_TAGGED = 6   # usable tagged words needed before grammar unlocks
 
@@ -73,6 +77,11 @@ def open_grammar():
         return
 
     random.shuffle(pool)
+    # repeat-until-mastery: weakest / unseen concepts first
+    order = concepts.weak_keys()
+    rank = {k: i for i, k in enumerate(order)}
+    pool.sort(key=lambda ti: rank.get(TEMPLATE_KEY.get(ti[0].id, ti[0].id),
+                                      len(order)))
     with study.Timer():
         _drill(pool)
 

@@ -69,7 +69,7 @@ def proficiency_beta():
     retention = _anki_retention()
 
     if acc is None and breadth == 0.0:
-        return 0.0, "no data yet - read or drill to build it", False
+        return 0.0, "no data yet", False
 
     parts, weights = [], []
     if acc is not None:
@@ -86,5 +86,5 @@ def proficiency_beta():
         nxt = BANDS[min(i + 1, len(BANDS) - 1)]
         label = "%d%% toward %s" % (round(fraction * 100), nxt)
     else:
-        label = "%d%% (take a CEFR check to calibrate)" % round(fraction * 100)
+        label = "%d%% · uncalibrated" % round(fraction * 100)
     return fraction, label, True

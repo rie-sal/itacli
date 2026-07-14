@@ -212,6 +212,10 @@ def _run_cloze(paragraph):
 def _read_book(book):
     text = book.get("text")
     if text is None:
+        ui.clear()
+        ui.blank()
+        ui.line("Fetching '%s' from Project Gutenberg..." % book.get("title", ""))
+        ui.line("(first time only - it's cached afterwards)")
         try:
             text = fetch_book(book["id"])
         except RuntimeError as e:
