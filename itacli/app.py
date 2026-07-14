@@ -56,11 +56,25 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
 
     if argv:
-        # commands run headless; ensure a data dir exists without onboarding
-        if paths.is_first_run():
-            paths.set_data_dir(paths.default_data_dir())
-        db.init_db()
+        db.init_db()          # get_data_dir auto-creates the profile folder
         cmd, rest = argv[0], argv[1:]
+        if cmd == "reset":
+            paths.reset_to_onboarding()
+            print("Reset. The next launch will start onboarding a new user.")
+            return
+        if cmd == "anki-check":
+            from . import anki, sync
+            if anki.is_available():
+                print("Anki: connected (AnkiConnect on :8765).")
+                pushed = sync.flush()
+                print("Synced %d queued card(s)." % pushed if pushed
+                      else "Nothing queued.")
+            else:
+                print("Anki: NOT reachable. Open Anki and install the AnkiConnect")
+                print("add-on (Tools > Add-ons > Get Add-ons > code 2055492159),")
+                print("then restart Anki. %d card(s) are queued and will sync."
+                      % sync.pending_count())
+            return
         if cmd == "listen":
             from . import capture
             return capture.listen()
@@ -109,6 +123,11 @@ def main(argv=None):
     if paths.is_first_run():
         from . import onboarding
         onboarding.run()
+    else:
+        db.init_db()
+        if not db.get_setting("user_name"):
+            from . import onboarding
+            onboarding.run()
     db.init_db()
     from . import sync
     pushed = sync.flush()          # drain the offline queue if Anki is up

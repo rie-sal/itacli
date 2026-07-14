@@ -41,10 +41,11 @@ def install_launcher():
     """Create ~/.local/bin/itacli. Returns (path, already_on_path)."""
     os.makedirs(BIN_DIR, exist_ok=True)
     launcher = os.path.join(BIN_DIR, "itacli")
+    # No forced data dir: use profiles (~/Library/Application Support/itacli).
+    # ITACLI_DATA_DIR still overrides if the user exports it (for sandboxing).
     body = (
         "#!/bin/bash\n"
-        'exec env ITACLI_DATA_DIR="${ITACLI_DATA_DIR:-$HOME/itacli-data}" '
-        '"%s" "%s" "$@"\n' % (sys.executable, os.path.join(_project_root(), "run.py"))
+        'exec "%s" "%s" "$@"\n' % (sys.executable, os.path.join(_project_root(), "run.py"))
     )
     with open(launcher, "w", encoding="utf-8") as f:
         f.write(body)

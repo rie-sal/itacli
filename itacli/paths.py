@@ -1,17 +1,22 @@
-"""Where user data lives (SPECS §5). Chosen at first run, changeable in
-Settings. A tiny bootstrap file at ~/.itacli.json remembers the location; the
-SQLite DB and content cache live inside it.
+"""Data location + user profiles (SPECS §5).
+
+Each user is a PROFILE - a named folder holding its own DB, cache, and library.
+This lets you keep multiple save-files (and, later, one per language). The
+active profile is remembered in a tiny bootstrap file at ~/.itacli.json. The DB
+and content live inside the active profile's folder.
+
+ITACLI_DATA_DIR overrides everything with a single explicit folder (used for
+sandbox/testing); profiles are bypassed in that mode.
 """
 import json
 import os
+import re
 import sys
 
 APP = "itacli"
 
 
 def _env_dir():
-    """Test/sandbox override: ITACLI_DATA_DIR wins over the bootstrap file, so
-    a throwaway run never touches your real data."""
     return os.environ.get("ITACLI_DATA_DIR")
 
 
@@ -19,11 +24,15 @@ def _bootstrap_path():
     return os.path.join(os.path.expanduser("~"), ".itacli.json")
 
 
-def default_data_dir():
+def _base_dir():
     home = os.path.expanduser("~")
     if sys.platform == "darwin":
         return os.path.join(home, "Library", "Application Support", APP)
     return os.path.join(home, ".local", "share", APP)
+
+
+def _profiles_dir():
+    return os.path.join(_base_dir(), "profiles")
 
 
 def _load():
@@ -37,33 +46,67 @@ def _load():
     return {}
 
 
-def is_first_run():
-    if _env_dir():
-        return not os.path.exists(os.path.join(_env_dir(), "itacli.db"))
-    return "data_dir" not in _load()
+def _save(data):
+    with open(_bootstrap_path(), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def slug(name):
+    s = re.sub(r"[^a-z0-9]+", "-", (name or "").strip().lower()).strip("-")
+    return s or "user"
+
+
+def active_profile():
+    return _load().get("active_profile")
+
+
+def list_profiles():
+    d = _profiles_dir()
+    return sorted(x for x in os.listdir(d)) if os.path.isdir(d) else []
 
 
 def get_data_dir():
-    d = _env_dir() or _load().get("data_dir") or default_data_dir()
+    if _env_dir():
+        os.makedirs(_env_dir(), exist_ok=True)
+        return _env_dir()
+    prof = active_profile() or "default"
+    d = os.path.join(_profiles_dir(), prof)
     os.makedirs(d, exist_ok=True)
     return d
 
 
-def set_data_dir(path, move_existing=True):
-    """Point itacli at `path`. Optionally move an existing DB there."""
-    new = os.path.abspath(os.path.expanduser(path.strip()))
-    os.makedirs(new, exist_ok=True)
-    old = _load().get("data_dir")
-    if move_existing and old and old != new:
-        old_db = os.path.join(old, "itacli.db")
-        new_db = os.path.join(new, "itacli.db")
-        if os.path.exists(old_db) and not os.path.exists(new_db):
-            os.replace(old_db, new_db)
+def is_first_run():
+    """True until an active profile exists with an initialised DB."""
+    if _env_dir():
+        return not os.path.exists(os.path.join(_env_dir(), "itacli.db"))
+    prof = active_profile()
+    if not prof:
+        return True
+    return not os.path.exists(os.path.join(_profiles_dir(), prof, "itacli.db"))
+
+
+def create_profile(name):
+    """Create (or reuse) a profile and make it active. Returns its folder."""
+    s = slug(name)
+    d = os.path.join(_profiles_dir(), s)
+    os.makedirs(d, exist_ok=True)
     data = _load()
-    data["data_dir"] = new
-    with open(_bootstrap_path(), "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-    return new
+    data["active_profile"] = s
+    _save(data)
+    return d
+
+
+def switch_profile(s):
+    data = _load()
+    data["active_profile"] = s
+    _save(data)
+
+
+def reset_to_onboarding():
+    """Forget the active profile so the next launch onboards (data kept)."""
+    data = _load()
+    data.pop("active_profile", None)
+    _save(data)
 
 
 def db_path():
@@ -72,5 +115,11 @@ def db_path():
 
 def content_cache():
     d = os.path.join(get_data_dir(), "content_cache")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def library_dir():
+    d = os.path.join(get_data_dir(), "library")
     os.makedirs(d, exist_ok=True)
     return d

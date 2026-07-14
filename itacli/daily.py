@@ -27,9 +27,10 @@ def _grammar_unlocked():
     return len(grammar._usable_items()) >= grammar.MIN_TAGGED
 
 
-def build_plan():
+def build_plan(budget=None):
     """Return [(activity, minutes), ...] adapted to weaknesses + time budget."""
-    budget = int(float(db.get_setting("time_budget_min", "30")))
+    if budget is None:
+        budget = int(float(db.get_setting("time_budget_min", "30")))
     weights = {"Reading": 0.4, "Vocabulary review": 0.2}
     if _grammar_unlocked():
         weights["Grammar"] = 0.4
@@ -77,11 +78,25 @@ def _run_activity(name):
 
 
 def open_daily():
-    plan = build_plan()
+    default_b = int(float(db.get_setting("time_budget_min", "30")))
     ui.clear()
     ui.blank()
-    ui.two_sided("Daily session", "%d min budget" % int(float(
-        db.get_setting("time_budget_min", "30"))))
+    ui.line("Daily session")
+    ui.blank()
+    ui.rule()
+    ui.blank()
+    try:
+        raw = input(ui.INDENT + "How many minutes do you have today? [%d]: "
+                    % default_b).strip()
+    except EOFError:
+        raw = ""
+    budget = int(raw) if raw.isdigit() and int(raw) > 0 else default_b
+    db.set_setting("time_budget_min", str(budget))
+    plan = build_plan(budget)
+
+    ui.clear()
+    ui.blank()
+    ui.two_sided("Daily session", "%d min budget" % budget)
     ui.blank()
     ui.rule()
     ui.blank()

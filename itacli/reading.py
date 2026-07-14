@@ -20,7 +20,7 @@ from . import anki, capture, db, paths, study, ui
 # Best-effort curated Italian texts. If a fetch fails, the reader falls back to
 # the bundled excerpt below, so the pillar always works offline.
 CURATED = [
-    {"id": "19517", "title": "Le avventure di Pinocchio", "author": "Carlo Collodi"},
+    {"id": "52484", "title": "Le avventure di Pinocchio", "author": "Carlo Collodi"},
     {"id": "45334", "title": "I promessi sposi", "author": "Alessandro Manzoni"},
     {"id": "997", "title": "La Divina Commedia: Inferno", "author": "Dante Alighieri"},
 ]
@@ -235,9 +235,12 @@ def _read_book(book):
             ph = _page_height()
             page = lines[pos:pos + ph]
             pct = int(min(pos + ph, total) / total * 100)
+            total_pages = max(1, -(-total // ph))
+            page_num = min(total_pages, pos // ph + 1)
             ui.clear()
             ui.blank()
-            ui.two_sided(book["title"], "%d%%" % pct)
+            ui.two_sided(book["title"],
+                         "page %d of %d · %d%%" % (page_num, total_pages, pct))
             ui.blank()
             ui.rule()
             ui.blank()
@@ -344,8 +347,10 @@ def _read_reddit():
 
 
 def open_reading():
-    """Menu entry: pick a source, then read."""
+    """Menu entry: pick from your library or a web source, then read."""
+    from . import library
     while True:
+        mine = library.items()
         ui.clear()
         ui.blank()
         ui.line("Reading - choose a text")
@@ -354,14 +359,12 @@ def open_reading():
         ui.blank()
         ui.line("0  Bundled excerpt (offline) - %s%s"
                 % (SAMPLE["title"], _pct_suffix("sample")))
-        for i, b in enumerate(CURATED, start=1):
-            ui.line("%d  %s - %s%s"
-                    % (i, b["title"], b["author"], _pct_suffix(b["id"])))
-        ui.line("g  Enter any Project Gutenberg ID")
-        ui.line("w  Wikisource (enter a title)")
-        ui.line("p  Wikipedia (enter a title)")
-        ui.line("r  Reddit (native-speaker threads)")
-        ui.line("q  Back to menu")
+        for i, it in enumerate(mine, start=1):
+            ui.line("%d  %s%s" % (i, it["title"], _pct_suffix(it["id"])))
+        if not mine:
+            ui.line("   (library empty - add texts in Content library, menu 8)")
+        ui.blank()
+        ui.line("w Wikisource   p Wikipedia   r Reddit   g Gutenberg ID   q Back")
         ui.blank()
         ui.rule()
         ui.blank()
@@ -386,5 +389,7 @@ def open_reading():
             _read_wikipedia()
         elif choice == "r":
             _read_reddit()
-        elif choice.isdigit() and 1 <= int(choice) <= len(CURATED):
-            _read_book(CURATED[int(choice) - 1])
+        elif choice.isdigit() and 1 <= int(choice) <= len(mine):
+            it = mine[int(choice) - 1]
+            _read_book({"id": it["id"], "title": it["title"],
+                        "text": library.load_text(it["file"])})
