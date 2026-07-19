@@ -230,12 +230,73 @@ def language_pack_walkthrough(out=print, input_fn=input, open_apps=None):
                 out("Could not open Translate - use the Shortcut route above.")
 
 
-def run_setup(out=print, input_fn=input, open_apps=None):
-    """Prepare artifacts, show synchronized status, and (only after asking, and
-    only when interactive) open the right apps. Never opens apps in a pipe/test."""
-    write_helper()
-    bundle = build_quick_action()
+def _reveal(path):
+    if os.path.exists(path):
+        _run(["open", "-R", path])
 
+
+def _terminal_app_path():
+    known = {
+        "Apple_Terminal": "/System/Applications/Utilities/Terminal.app",
+        "iTerm.app": "/Applications/iTerm.app",
+        "vscode": "/Applications/Visual Studio Code.app",
+        "WarpTerminal": "/Applications/Warp.app",
+        "Hyper": "/Applications/Hyper.app",
+        "WezTerm": "/Applications/WezTerm.app",
+    }
+    return known.get(os.environ.get("TERM_PROGRAM", ""))
+
+
+def _accessibility_apps():
+    apps = []
+    tp = _terminal_app_path()
+    if tp:
+        apps.append(tp)
+    apps.append("/System/Applications/Automator.app")
+    return apps
+
+
+def _step(out, input_fn, act, title, short_lines, eli5_lines, do):
+    out("")
+    out("--- %s ---" % title)
+    for l in short_lines:
+        out("  " + l)
+    if act and do:
+        do()
+    while True:
+        try:
+            c = input_fn(ui.INDENT + "[Enter] done, next  ·  [?] explain step by "
+                         "step  ·  [o] re-open  ·  [s] skip: ").strip().lower()
+        except EOFError:
+            return
+        if c in ("?", "e", "help"):
+            out("")
+            for l in eli5_lines:
+                out("  " + l)
+            continue
+        if c == "o":
+            if act and do:
+                do()
+            continue
+        return
+
+
+def _concise_guide(pretty, tname):
+    return [
+        "One-time setup - run  itacli setup  in a terminal to do this guided.",
+        "1. Accessibility: add your terminal + Automator and toggle them ON.",
+        "2. Bind %s to 'itacli capture' under System Settings > Keyboard >" % pretty,
+        "   Keyboard Shortcuts > Services > General.",
+        "3. Create a Shortcut named '%s' (Translate Text, Italian>English," % tname,
+        "   input = Shortcut Input). Then: itacli test-translate ciao",
+    ]
+
+
+def run_setup(out=print, input_fn=input, open_apps=None):
+    """Guided macOS setup: auto-installs the Quick Action, opens/reveals the
+    exact apps, and offers per-step ELI5 explanations. Never touches the OS in a
+    pipe/test."""
+    write_helper()
     hk = db.get_setting("capture_hotkey", "<cmd>+<shift>+i")
     try:
         pretty = hotkeys.human(hk)
@@ -243,73 +304,73 @@ def run_setup(out=print, input_fn=input, open_apps=None):
         pretty = hk
     tname = db.get_setting("translate_shortcut", "itacli Translate")
 
-    qa_done = quick_action_installed()
-    tr_done = shortcut_installed(tname)
+    act = _is_macos() and (open_apps if open_apps is not None else sys.stdout.isatty())
 
-    for line in [
-        "itacli - one-time macOS setup",
-        "",
-        "Capture hotkey:  %s" % pretty,
-        "Runs command:    %s" % capture_command(),
-        "",
-        "Status",
-        "  [%s] Quick Action installed in ~/Library/Services" % ("x" if qa_done else " "),
-        "  [%s] Translate Shortcut '%s'" % ("x" if tr_done else " ", tname),
-        "  [ ] Accessibility granted   (can't be auto-detected)",
-        "  [ ] Hotkey bound in System Settings",
-        "",
-        "Generated (experimental) Quick Action:",
-        "  %s" % bundle,
-        "",
-        "Steps:",
-        "1. Accessibility: add your terminal (+ Automator/Shortcuts), toggle on.",
-        "2. Install the Quick Action: double-click the bundle above (or let me",
-        "   copy it to ~/Library/Services), then bind %s under" % pretty,
-        "   System Settings > Keyboard > Keyboard Shortcuts > Services.",
-        "3. Translate Shortcut - in Shortcuts.app, New Shortcut named '%s':" % tname,
-        "     - Add action 'Translate Text'; set language from Italian to",
-        "       English; tap the text field and choose 'Shortcut Input'.",
-        "     - The shortcut auto-returns the last result (no extra action).",
-        "     - In the shortcut's (i) details, set 'Receive' = Text.",
-        "   Then run it once online so macOS downloads the Italian model.",
-        "   Verify it works:   run.py test-translate ciao",
-        "   (Optional - cards are still created without it.)",
-        "",
-        "Note: the Anki deck '%s' is created automatically the first time"
-        % db.get_setting("anki_deck", "itacli"),
-        "itacli adds a card (needs Anki open with AnkiConnect) - not by the",
-        "Shortcut. The Shortcut only produces the translation.",
-    ]:
-        out(line)
+    out("itacli - one-time setup for your capture hotkey  (%s)" % pretty)
+    out("")
 
-    if open_apps is None:
-        open_apps = sys.stdout.isatty()   # never auto-open in a pipe / test
-    if not (open_apps and _is_macos()):
+    if not act:
+        for l in _concise_guide(pretty, tname):
+            out(l)
         return
 
-    out("")
-    out("Let's do it together - I'll open each thing when you're ready.")
-    _guided_step(input_fn, out, "grant Accessibility", lambda: _open_url(
-        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"))
-    if not qa_done:
-        _guided_step(input_fn, out, "open Automator for the Quick Action",
-                     lambda: _open_app("Automator"))
-    _guided_step(input_fn, out, "open Keyboard shortcuts to bind %s" % pretty,
-                 lambda: _open_url("x-apple.systempreferences:"
-                                   "com.apple.Keyboard-Settings.extension"))
-    if not tr_done:
-        _guided_step(input_fn, out, "open Shortcuts to create '%s'" % tname,
-                     lambda: _open_app("Shortcuts"))
-    out("")
-    out("When the Translate Shortcut exists, verify it:  run.py test-translate ciao")
-
-
-def _guided_step(input_fn, out, label, action):
+    # (2b) default to installing the Quick Action for the user
     try:
-        ans = input_fn(ui.INDENT + "[Enter] %s   ([s] skip): " % label)
-    except EOFError:
-        return
-    if ans.strip().lower() == "s":
-        return
-    action()
-    out("  ...opened.")
+        install_quick_action()
+        out("Done: installed your capture Quick Action into ~/Library/Services.")
+    except Exception as e:
+        out("(Couldn't auto-install the Quick Action: %s - not fatal.)" % e)
+    out("Three quick steps. Press [?] on any step for a plain-English walk-through.")
+
+    acc_apps = _accessibility_apps()
+
+    def do_accessibility():
+        _open_url("x-apple.systempreferences:com.apple.preference.security"
+                  "?Privacy_Accessibility")
+        for a in acc_apps:
+            _reveal(a)
+
+    _step(out, input_fn, act, "Step 1 of 3: Accessibility",
+          ["This lets itacli press Cmd-C for you in any app.",
+           "I opened Accessibility settings + a Finder window with the apps.",
+           "Add these to the list and switch each ON:"] + ["   " + a for a in acc_apps],
+          ["Why: macOS won't let a program use your keyboard until you allow it.",
+           "Step by step:",
+           "  1. In the Accessibility list, click the small '+' button.",
+           "  2. A file window opens. Press  Cmd-Shift-G  (a 'go to folder' box).",
+           "  3. Paste one of these paths, press Return, then click Open:"]
+          + ["        " + a for a in acc_apps]
+          + ["  4. Back in the list, flip its switch ON (turns blue).",
+             "  5. Do the same for each app listed above.",
+             "Easier: I opened them in Finder - just DRAG each into the list.",
+             "Also: the first time your hotkey fires, macOS may pop up asking for",
+             "this - if so, just click Allow / Open System Settings."],
+          do_accessibility)
+
+    _step(out, input_fn, act, "Step 2 of 3: Bind your hotkey",
+          ["Your capture Quick Action is installed; now give it the hotkey %s." % pretty,
+           "I opened Keyboard settings."],
+          ["Why: this is what makes %s trigger itacli everywhere." % pretty,
+           "Step by step:",
+           "  1. In Keyboard settings, click 'Keyboard Shortcuts...'.",
+           "  2. Select 'Services' in the left list.",
+           "  3. Open the 'General' group; find 'itacli capture'.",
+           "  4. Double-click 'none' to its right, then press  %s ." % pretty],
+          lambda: _open_url("x-apple.systempreferences:com.apple.Keyboard-Settings.extension"))
+
+    _step(out, input_fn, act, "Step 3 of 3: Translate Shortcut (optional)",
+          ["For automatic translations, make a Shortcut named '%s'." % tname,
+           "I opened Shortcuts. (Cards still save without this.)"],
+          ["Why: this gives itacli Apple's translator for word glosses.",
+           "Step by step:",
+           "  1. In Shortcuts, click '+' (new shortcut). Name it exactly:",
+           "        %s" % tname,
+           "  2. Search actions for 'Translate Text'; add it.",
+           "  3. Set it Italian > English; click the text field, pick 'Shortcut Input'.",
+           "  4. Open the (i) tab; set 'Receive' to 'Text'.",
+           "  5. Run it once (type 'ciao') while online to download the model.",
+           "  Then check it worked:  itacli test-translate ciao"],
+          lambda: _open_app("Shortcuts"))
+
+    out("")
+    out("All set - %s now captures, translates, and saves cards." % pretty)
