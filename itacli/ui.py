@@ -157,7 +157,7 @@ def home(data):
     line("2  Reading & library                 7  Progress & statistics")
     line("3  Grammar                           9  Settings")
     line("4  Vocabulary (Anki)                 t  Set daily time")
-    line("5  Listening                         q  Quit")
+    line("5  Listening                         ?  Help     q  Quit")
     blank()
     rule()
     blank()

@@ -149,10 +149,10 @@ def save_word(term, context):
     term = term.strip()
     if not term:
         return None
-    it_form, pos, gender, tense = capture._canonical(term)
+    it_form, pos, gender, tense = capture._canonical(term, context)
     if capture._already_have(it_form):
         return None
-    english = capture.translate(it_form, target="en")
+    english = capture.translate(it_form)
     note_id = anki.add_card(it_form, english) if anki.is_available() else None
     conn = db.connect()
     try:
@@ -218,7 +218,9 @@ def _run_cloze(paragraph):
     if not guess:
         return
     correct = _norm(guess) == _norm(answer)
-    _record_attempt(correct, "reading-cloze")
+    from . import morph
+    concept = morph.verb_concept(answer, paragraph)   # route verb clozes -> concept
+    _record_attempt(correct, "grammar:%s" % concept if concept else "reading-cloze")
     ui.line("  " + ("correct!" if correct else "the word was: %s" % answer))
     try:
         input(ui.INDENT + "  press Enter ")

@@ -140,6 +140,12 @@ def open_assessment():
             s[0] += 1
             s[1] += int(result)
             _log_item(item, result)
+            ui.blank()                              # learn from mistakes
+            ui.line("  correct!" if result else "  answer: %s" % item["answer"])
+            try:
+                input(ui.INDENT + "  press Enter ")
+            except EOFError:
+                return
 
     ls = {lvl: (t, c) for lvl, (t, c) in level_scores.items()}
     overall = _estimate(ls) or "pre-A1"

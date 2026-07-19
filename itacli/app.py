@@ -45,21 +45,97 @@ def _quick_add(args):
     print("Added: %s" % front if note_id else "Not added (duplicate?): %s" % front)
 
 
+HELP = [
+    "itacli - help & commands",
+    "",
+    "Menu keys:",
+    "  1 Daily session   2 Reading & library   3 Grammar",
+    "  4 Vocabulary(Anki) 5 Listening   6 Assessment   7 Progress   9 Settings",
+    "  t Set daily time   q Quit",
+    "",
+    "Type any of these commands at the '>' prompt (or in a terminal):",
+    "  setup               (re)run the one-time macOS hotkey/translate setup",
+    "  anki-check          check the Anki connection + sync queued cards",
+    "  install-ankiconnect install the AnkiConnect add-on automatically",
+    "  test-translate WORD verify the Translate shortcut on a word",
+    '  add "term" "meaning" quick-add a flashcard to Anki',
+    "  ?                   show this help",
+    "",
+    "The capture hotkey (set in Settings) works everywhere, outside the app.",
+]
+
+
+def _help():
+    ui.panel("Help", HELP[1:])
+
+
+def _home_command(cmd, rest):
+    ui.clear()
+    ui.blank()
+    if cmd == "setup":
+        from . import macsetup
+        macsetup.run_setup(out=ui.line)
+    elif cmd == "anki-check":
+        from . import anki, sync
+        if anki.is_available():
+            ui.line("Anki: connected. Synced %d queued card(s)." % sync.flush())
+        else:
+            ui.line("Anki: NOT reachable. Open Anki + AnkiConnect; %d queued."
+                    % sync.pending_count())
+    elif cmd == "install-ankiconnect":
+        from . import ankisetup
+        ui.line(ankisetup.install_ankiconnect()[1])
+    elif cmd == "test-translate":
+        from . import capture
+        word = rest[0] if rest else "ciao"
+        out = capture.translate(word)
+        ui.line("%s -> %s" % (word, out) if out
+                else "No translation (is the 'itacli Translate' shortcut set up?).")
+    elif cmd == "add":
+        from . import anki
+        if len(rest) >= 1 and anki.is_available():
+            ui.line("Added." if anki.add_card(rest[0], rest[1] if len(rest) > 1 else "")
+                    else "Not added (duplicate?).")
+        else:
+            ui.line('Usage: add "term" "meaning"  (and Anki must be open).')
+    else:
+        ui.line("Unknown command: %s   (type ? for help)" % cmd)
+    ui.blank()
+    try:
+        input(ui.INDENT + "press Enter ")
+    except EOFError:
+        pass
+
+
+_HOME_COMMANDS = {"setup", "anki-check", "install-ankiconnect", "test-translate", "add"}
+
+
 def menu_loop():
+    import shlex
     while True:
         ui.home(state.home_data())
         try:
-            choice = input(ui.INDENT + "> ").strip().lower()
+            raw = input(ui.INDENT + "> ").strip()
         except EOFError:
             break
-        if choice in ("q", "quit", "exit"):
+        low = raw.lower()
+        if low in ("q", "quit", "exit"):
             break
-        if choice == "t":
+        if low == "t":
             _set_time()
             continue
-        action = MENU.get(choice)
-        if action:
-            action()
+        if low in ("?", "help", "h"):
+            _help()
+            continue
+        if low in MENU:
+            MENU[low]()
+            continue
+        try:
+            parts = shlex.split(raw)
+        except ValueError:
+            parts = raw.split()
+        if parts and parts[0].lower() in _HOME_COMMANDS:
+            _home_command(parts[0].lower(), parts[1:])
     ui.clear()
     print("\n" + ui.INDENT + "Buon studio.\n")
 

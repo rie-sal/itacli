@@ -67,16 +67,16 @@ def _installed_shortcuts():
     return _shortcuts_cache
 
 
-def translate(text, target="en"):
-    """Translate via Apple's on-device translation (a macOS Shortcut).
+def translate(text):
+    """Translate via Apple's on-device translation (one macOS Shortcut).
 
-    target='en' uses the 'itacli Translate' shortcut (Italian->English);
-    target='it' uses 'itacli Translate to Italian' (English->Italian) so the
-    user can also highlight native-language words. Returns "" if the relevant
-    shortcut isn't installed. No LLM, no network.
+    ONE shortcut handles both directions: if you build it to detect the input
+    language and translate Italian->English else ->Italian, it flips
+    automatically. So selecting Italian gives the English gloss, and selecting
+    your native word gives the Italian. Returns "" if the shortcut isn't set up.
+    No LLM, no network.
     """
-    key = "translate_shortcut" if target == "en" else "translate_it_shortcut"
-    name = db.get_setting(key, "")
+    name = db.get_setting("translate_shortcut", "")
     if not name or name not in _installed_shortcuts():
         return ""
     try:
@@ -152,15 +152,23 @@ def _looks_english(text):
     return en > sources.italian_ratio(text) and en > 0.1
 
 
-def _canonical(term):
+def _canonical(term, context=None):
     """Return (italian_form, pos, gender, tense_concept). A single Italian word
     becomes its LEMMA (un-conjugated: 'vado'->'andare', 'gatti'->'gatto');
-    phrases stay as-is."""
-    from . import morph
+    phrases stay as-is. Verbs use the reliable mlconjug3 reverse index first,
+    then spaCy."""
+    from . import morph, unconjugate
     if " " in term.strip() or not term.strip().isalpha():
         return term.strip(), None, None, None
-    pos, gender, lemma = morph.analyze(term)
-    tense = morph.verb_concept(term) if pos == "verb" else None
+    pos, gender, lemma = morph.analyze(term, context)
+    inf = unconjugate.infinitive(term)
+    if pos == "verb" or (inf and pos is None):
+        pos = "verb"
+        if inf:
+            lemma = inf                     # trustworthy for common verbs
+        tense = morph.verb_concept(term, context)
+    else:
+        tense = None
     return (lemma or term.strip().lower()), pos, gender, tense
 
 
@@ -202,15 +210,15 @@ def capture_pipeline(text, notify=False):
     added, skipped, seen = [], [], set()
     anki_up = anki.is_available()
     for term in chunk(text):
-        if native:                          # user highlighted English -> get Italian
-            italian = translate(term, target="it")
-            if not italian:
-                continue                    # need the reverse shortcut; skip quietly
+        if native:                          # user highlighted their language -> Italian
+            italian = translate(term)
+            if not italian or _looks_english(italian):
+                continue                    # shortcut isn't bidirectional; skip quietly
             it_form, pos, gender, tense = _canonical(italian)
             english = term
         else:
-            it_form, pos, gender, tense = _canonical(term)
-            english = translate(it_form, target="en")
+            it_form, pos, gender, tense = _canonical(term, text)   # context!
+            english = translate(it_form)
         if it_form.lower() in seen or _already_have(it_form):
             continue
         seen.add(it_form.lower())

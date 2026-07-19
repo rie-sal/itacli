@@ -372,9 +372,11 @@ def run_setup(out=print, input_fn=input, open_apps=None):
            "     itacli hands to it.",
            "  5. Click the settings button (sliders icon, top of the shortcut)",
            "     and set 'Receive' to 'Text' - this lets itacli pass the word in.",
-           "  6. Save it. The first time it runs while online, macOS downloads",
-           "     the Italian model once; after that it works offline.",
-           "  Check it worked:  itacli test-translate ciao"],
+           "  6. Save it. You don't need to do anything else: the Italian model",
+           "     downloads by itself the first time itacli translates a word",
+           "     online, then it works offline.",
+           "  (Optional test: run  itacli test-translate ciao  - that just",
+           "   translates the word 'ciao' to check the shortcut is wired up.)"],
           lambda: _open_app("Shortcuts"))
 
     out("")

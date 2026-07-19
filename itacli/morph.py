@@ -100,17 +100,38 @@ def _nlp():
     return _NLP or None
 
 
-def analyze(word):
-    """Return (pos, gender, lemma) using spaCy when available, else heuristic."""
+def _tok_info(t):
+    pos = _POS_MAP.get(t.pos_)
+    g = t.morph.get("Gender")
+    gender = {"Masc": "m", "Fem": "f"}.get(g[0]) if g else None
+    return pos, gender, t.lemma_.lower()
+
+
+def _find_token(word, context):
+    """Locate `word` inside its sentence so spaCy lemmatises it IN CONTEXT
+    (crucial for irregulars: 'vado' -> 'andare' only works with context)."""
+    nlp = _nlp()
+    if not (nlp and context):
+        return None
+    wl = word.strip().lower()
+    for t in nlp(context):
+        if t.is_alpha and t.text.lower() == wl:
+            return t
+    return None
+
+
+def analyze(word, context=None):
+    """Return (pos, gender, lemma). Uses the sentence `context` when given so
+    irregular forms lemmatise correctly; falls back to the word alone, then a
+    heuristic."""
     nlp = _nlp()
     if nlp and word:
-        toks = [t for t in nlp(word) if t.is_alpha]
+        t = _find_token(word, context)
+        if t is not None:
+            return _tok_info(t)
+        toks = [tk for tk in nlp(word) if tk.is_alpha]
         if toks:
-            t = toks[0]
-            pos = _POS_MAP.get(t.pos_)
-            g = t.morph.get("Gender")
-            gender = {"Masc": "m", "Fem": "f"}.get(g[0]) if g else None
-            return pos, gender, t.lemma_.lower()
+            return _tok_info(toks[0])
     pos, gender = guess_features(word)
     return pos, gender, (word or "").strip().lower()
 
@@ -148,16 +169,18 @@ def conjugate_concept(infinitive, concept, person="1s"):
     return conjugate(infinitive, person=person, mood=mt[0], tense=mt[1])
 
 
-def verb_concept(word):
+def verb_concept(word, context=None):
     """Detect which tense/mood concept a conjugated verb is in (for the tally).
-    Returns a key from VERB_TENSE or None."""
+    Uses sentence context when given. Returns a key from VERB_TENSE or None."""
     nlp = _nlp()
     if not nlp or not word:
         return None
-    toks = [t for t in nlp(word) if t.pos_ in ("VERB", "AUX")]
-    if not toks:
-        return None
-    t = toks[0]
+    t = _find_token(word, context)
+    if t is None or t.pos_ not in ("VERB", "AUX"):
+        toks = [tk for tk in nlp(word) if tk.pos_ in ("VERB", "AUX")]
+        if not toks:
+            return None
+        t = toks[0]
     mood = (t.morph.get("Mood") or [""])[0]
     tense = (t.morph.get("Tense") or [""])[0]
     if mood == "Sub":

@@ -17,8 +17,11 @@ SIGNALS & PRIORITY (highest first):
   4. Anki card mastery: if the word's Anki card is mature/mastered it's shown
      less; if you're still learning it, it's shown more. (Needs Anki reachable;
      skipped otherwise.)
-  5. Variety: never repeat a concept back-to-back; scores are jittered so the
-     set isn't identical each time - a mix of concepts and new vs review.
+  5. New over review: NEW concepts outweigh ones you've largely learned; only
+     genuinely weak concepts beat new content. Spaced repetition rests a concept
+     you just got right. Selection is by need (NOT forced variety - a concept you
+     really need can dominate), jittered, then ordered easiest-CEFR-first so each
+     session ramps up in difficulty.
 
 WHERE IT LIVES: this module (itacli/grammar_selector.py). grammar.open_grammar()
 calls select(). Weights are the module constants below - tune them there.
@@ -27,8 +30,7 @@ import random
 
 from . import concepts, db, morph, templates
 
-W_LEARNING = 3.0        # weight for a concept you're actively learning
-W_NEW = 2.0             # weight for a concept not started yet (introduce it)
+W_NEW = 3.0             # weight for a not-started concept (favour new content)
 TENSE_TALLY_BOOST = 0.6  # per highlight of that tense
 VERB_TENSE_PAIR_BOOST = 2.0  # exact (verb, tense) you looked up
 ANKI_MASTERED_FACTOR = 0.35  # show mastered-card words this much as often
@@ -108,41 +110,61 @@ def _candidates(vocab):
     return out
 
 
-def _score(c, mastery, tally, pairs, anki_mastered):
+def _recent_correct_concepts(n=8):
+    """Concepts answered correctly in the last n attempts - rested a bit so they
+    space out (spaced repetition), without blocking genuinely weak ones."""
+    conn = db.connect()
+    try:
+        rows = conn.execute(
+            "SELECT concept_tags FROM attempts WHERE correct=1 AND "
+            "concept_tags LIKE 'grammar:%' ORDER BY id DESC LIMIT ?", (n,)).fetchall()
+    finally:
+        conn.close()
+    return {concepts.normalize(r[0]) for r in rows}
+
+
+def _score(c, mastery, tally, pairs, anki_mastered, recent_ok):
     key = concepts.normalize(c["concept"])
     m = mastery.get(key)
     if m and m["status"] == "mastered":
         return 0.0                                   # (1) mastered -> removed
-    base = W_LEARNING if (m and m["status"] == "learning") else W_NEW
+    if m and m["status"] == "learning":
+        # weaker -> higher; a nearly-mastered concept dips BELOW new content
+        base = 1.5 + 3.0 * (1.0 - (m["accuracy"] or 0.0))
+    else:
+        base = W_NEW                                 # (1b) favour new content
     if c["tense"]:                                   # (2) tense tally
         base *= 1.0 + TENSE_TALLY_BOOST * tally.get(c["tense"], 0)
     if c["tense"] and (c["word"], c["tense"]) in pairs:   # (3) exact combo
         base *= VERB_TENSE_PAIR_BOOST
     if c["word"] in anki_mastered:                   # (4) mastered card -> less
         base *= ANKI_MASTERED_FACTOR
+    if key in recent_ok:                             # (1c) spaced repetition
+        base *= 0.5
     return base
 
 
+# concepts.CATALOG is CEFR-ordered, so this gives an easy->hard difficulty ramp.
+_CEFR_RANK = {c["key"]: i for i, c in enumerate(concepts.CATALOG)}
+
+
 def select(n=8):
-    """Return up to n exercise dicts, ranked + varied per the algorithm above."""
+    """Return up to n exercise dicts. Ranked purely by weakness/need (no forced
+    variety - if one concept dominates, so be it), jittered, then ordered easiest
+    CEFR first so each session ramps up."""
     vocab = _usable_vocab()
     if not vocab:
         return []
     mastery = {m["key"]: m for m in concepts.mastery()}
     tally, pairs, anki_m = _tense_tally(), _verb_tense_pairs(), _anki_mastered_terms()
+    recent_ok = _recent_correct_concepts()
 
     scored = []
     for c in _candidates(vocab):
-        s = _score(c, mastery, tally, pairs, anki_m)
+        s = _score(c, mastery, tally, pairs, anki_m, recent_ok)
         if s > 0:
-            scored.append((c, s * random.uniform(0.85, 1.15)))   # (5) jitter
+            scored.append((c, s * random.uniform(0.8, 1.2)))    # light jitter only
     scored.sort(key=lambda cs: cs[1], reverse=True)
-
-    chosen, last = [], None                          # (5) no concept twice in a row
-    pool = scored[:]
-    while pool and len(chosen) < n:
-        idx = next((i for i, (c, _) in enumerate(pool) if c["concept"] != last), 0)
-        c, _ = pool.pop(idx)
-        chosen.append(c["exercise"])
-        last = c["concept"]
-    return chosen
+    chosen = [c for c, _ in scored[:n]]
+    chosen.sort(key=lambda c: _CEFR_RANK.get(concepts.normalize(c["concept"]), 99))
+    return [c["exercise"] for c in chosen]
