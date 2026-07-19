@@ -83,7 +83,8 @@ DEFAULT_SETTINGS = {
     "study_minutes_total": "0",
     "day_count": "1",
     "capture_hotkey": "<cmd>+<shift>+i",   # the single do-everything shortcut
-    "translate_shortcut": "itacli Translate",  # macOS Shortcut used for glosses
+    "translate_shortcut": "itacli Translate",  # macOS Shortcut: Italian->English
+    "translate_it_shortcut": "itacli Translate to Italian",  # English->Italian
     "anki_deck": "itacli",
     "user_name": "",
     "show_popup": "1",   # show a translation popup on capture

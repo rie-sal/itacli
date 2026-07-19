@@ -68,34 +68,26 @@ def open_grammar():
         ])
         return
 
-    pool = _pool()
-    if not pool:
+    from . import grammar_selector
+    exercises = grammar_selector.select(8)
+    if not exercises:
         ui.panel("Grammar", [
-            "You have tagged vocab, but none of it fits the current drill",
-            "templates yet (they need clean, regular nouns). Save a few more.",
+            "You have tagged vocab, but none of it fits the current drills yet,",
+            "or you've mastered everything available. Save a few more words.",
         ])
         return
 
-    random.shuffle(pool)
-    # repeat-until-mastery: weakest / unseen concepts first
-    order = concepts.weak_keys()
-    rank = {k: i for i, k in enumerate(order)}
-    pool.sort(key=lambda ti: rank.get(TEMPLATE_KEY.get(ti[0].id, ti[0].id),
-                                      len(order)))
     with study.Timer():
-        _drill(pool)
+        _drill(exercises)
 
 
-def _drill(pool):
+def _drill(exercises):
     asked = right = 0
-    for template, item in pool[:8]:
-        ex = template.build(item)
-        if not ex:
-            continue
+    for ex in exercises:
         asked += 1
         ui.clear()
         ui.blank()
-        ui.two_sided("Grammar · %s" % template.concept, "%s" % template.cefr)
+        ui.two_sided("Grammar · %s" % ex["concept"].replace("-", " "), "")
         ui.blank()
         ui.rule()
         ui.blank()

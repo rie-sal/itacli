@@ -128,6 +128,53 @@ def _conjugator():
     return _CONJ or None
 
 
+# Grammar-concept key -> (mlconjug3 mood, tense) for exercise generation.
+VERB_TENSE = {
+    "present-tense": ("Indicativo", "Indicativo presente"),
+    "passato-prossimo": ("Indicativo", "Indicativo passato prossimo"),
+    "imperfetto": ("Indicativo", "Indicativo imperfetto"),
+    "futuro": ("Indicativo", "Indicativo futuro semplice"),
+    "congiuntivo": ("Congiuntivo", "Congiuntivo presente"),
+    "congiuntivo-imperfetto": ("Congiuntivo", "Congiuntivo imperfetto"),
+    "conditional": ("Condizionale", "Condizionale presente"),
+}
+
+
+def conjugate_concept(infinitive, concept, person="1s"):
+    """Conjugate for a grammar-concept key (e.g. 'imperfetto'). None if unknown."""
+    mt = VERB_TENSE.get(concept)
+    if not mt:
+        return None
+    return conjugate(infinitive, person=person, mood=mt[0], tense=mt[1])
+
+
+def verb_concept(word):
+    """Detect which tense/mood concept a conjugated verb is in (for the tally).
+    Returns a key from VERB_TENSE or None."""
+    nlp = _nlp()
+    if not nlp or not word:
+        return None
+    toks = [t for t in nlp(word) if t.pos_ in ("VERB", "AUX")]
+    if not toks:
+        return None
+    t = toks[0]
+    mood = (t.morph.get("Mood") or [""])[0]
+    tense = (t.morph.get("Tense") or [""])[0]
+    if mood == "Sub":
+        return "congiuntivo-imperfetto" if tense == "Imp" else "congiuntivo"
+    if mood == "Cnd":
+        return "conditional"
+    if tense == "Imp":
+        return "imperfetto"
+    if tense == "Past":
+        return "passato-prossimo"
+    if tense == "Fut":
+        return "futuro"
+    if tense == "Pres":
+        return "present-tense"
+    return None
+
+
 def conjugate(infinitive, person="1s", mood="Indicativo", tense="Indicativo presente"):
     """Conjugate a verb via mlconjug3, or None if unavailable/unknown.
 

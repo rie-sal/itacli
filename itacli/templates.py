@@ -87,6 +87,33 @@ def _present_tense(item):
     }
 
 
+_CONCEPT_LABEL = {
+    "present-tense": "Present tense", "passato-prossimo": "Passato prossimo",
+    "imperfetto": "Imperfetto", "futuro": "Future tense",
+    "congiuntivo": "Congiuntivo (present)",
+    "congiuntivo-imperfetto": "Congiuntivo imperfetto", "conditional": "Conditional",
+}
+
+
+def verb_exercise(item, concept):
+    """Fill-in for a verb in a specific tense/mood concept. None if it can't be
+    generated (word isn't a regular-looking verb, or morphology unavailable)."""
+    lemma = (item.get("lemma") or item["term"]).lower()
+    if not lemma.endswith(("are", "ere", "ire")):
+        return None
+    person, label = _PERSONS[len(lemma) % len(_PERSONS)]
+    form = morph.conjugate_concept(lemma, concept, person=person)
+    if not form:
+        return None
+    name = _CONCEPT_LABEL.get(concept, concept)
+    return {
+        "prompt": "%s - conjugate:   %s ___   (%s)" % (name, label, lemma),
+        "answer": form,
+        "note": "%s, %s of %s." % (name, label, lemma),
+        "concept": concept,
+    }
+
+
 TEMPLATES = [
     Template("def-art", "Definite articles", "A1", _is_noun_with_gender, _definite_article),
     Template("indef-art", "Indefinite articles", "A1", _is_noun_with_gender, _indefinite_article),

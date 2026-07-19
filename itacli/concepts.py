@@ -16,6 +16,7 @@ CATALOG = [
     {"key": "passato-prossimo", "name": "Passato prossimo", "cefr": "A2"},
     {"key": "prepositions", "name": "Prepositions", "cefr": "A2"},
     {"key": "comparatives", "name": "Comparatives", "cefr": "A2"},
+    {"key": "futuro", "name": "Future tense", "cefr": "A2"},
     {"key": "imperfetto", "name": "Imperfetto", "cefr": "B1"},
     {"key": "pronouns", "name": "Object pronouns", "cefr": "B1"},
     {"key": "congiuntivo", "name": "Congiuntivo (present)", "cefr": "B1"},

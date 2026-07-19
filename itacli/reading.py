@@ -144,21 +144,23 @@ def _pct_suffix(book_id):
 
 
 def save_word(term, context):
-    """Gloss + push to Anki + record in vocab (added_from='reading')."""
+    """Un-conjugate + gloss + push to Anki (front=Italian, back=English) + record
+    in vocab. Dedupes by canonical form. Reading is always Italian text."""
     term = term.strip()
     if not term:
         return None
-    gloss = capture.translate(term)
-    note_id = anki.add_card(term, gloss) if anki.is_available() else None
-    from . import morph
-    pos, gender, lemma = morph.analyze(term)
+    it_form, pos, gender, tense = capture._canonical(term)
+    if capture._already_have(it_form):
+        return None
+    english = capture.translate(it_form, target="en")
+    note_id = anki.add_card(it_form, english) if anki.is_available() else None
     conn = db.connect()
     try:
         conn.execute(
             "INSERT INTO vocab(term, gloss, source_context, status, "
-            "anki_note_id, added_from, pos, gender, lemma) "
-            "VALUES (?, ?, ?, 'new', ?, 'reading', ?, ?, ?)",
-            (term, gloss, context, note_id, pos, gender, lemma),
+            "anki_note_id, added_from, pos, gender, lemma, features) "
+            "VALUES (?, ?, ?, 'new', ?, 'reading', ?, ?, ?, ?)",
+            (it_form, english, context, note_id, pos, gender, it_form, tense),
         )
         conn.commit()
     finally:

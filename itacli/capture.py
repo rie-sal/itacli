@@ -67,14 +67,16 @@ def _installed_shortcuts():
     return _shortcuts_cache
 
 
-def translate(text):
-    """Gloss via Apple's on-device translation, run through a macOS Shortcut.
+def translate(text, target="en"):
+    """Translate via Apple's on-device translation (a macOS Shortcut).
 
-    Uses file I/O (--input-path/--output-path) for reliability. Returns "" if
-    the Shortcut isn't installed yet, so the card is still created and you can
-    add the meaning in Anki. No LLM, no network.
+    target='en' uses the 'itacli Translate' shortcut (Italian->English);
+    target='it' uses 'itacli Translate to Italian' (English->Italian) so the
+    user can also highlight native-language words. Returns "" if the relevant
+    shortcut isn't installed. No LLM, no network.
     """
-    name = db.get_setting("translate_shortcut", "")
+    key = "translate_shortcut" if target == "en" else "translate_it_shortcut"
+    name = db.get_setting(key, "")
     if not name or name not in _installed_shortcuts():
         return ""
     try:
@@ -133,27 +135,54 @@ def _load_spacy():
     return _SPACY
 
 
-def _already_have(term):
+# A few very common English words - used only to guess if the SELECTION is in
+# the user's native language (so we can translate the other way).
+_EN_COMMON = set((
+    "the of and to a in is it you that he was for on are with as his they be at "
+    "this from or by but not what all we when can there an which do how if").split())
+
+
+def _looks_english(text):
+    from . import sources
+    words = [w.strip(".,;:!?\"'()[]").lower() for w in text.split()]
+    words = [w for w in words if w.isalpha()]
+    if not words:
+        return False
+    en = sum(1 for w in words if w in _EN_COMMON) / len(words)
+    return en > sources.italian_ratio(text) and en > 0.1
+
+
+def _canonical(term):
+    """Return (italian_form, pos, gender, tense_concept). A single Italian word
+    becomes its LEMMA (un-conjugated: 'vado'->'andare', 'gatti'->'gatto');
+    phrases stay as-is."""
+    from . import morph
+    if " " in term.strip() or not term.strip().isalpha():
+        return term.strip(), None, None, None
+    pos, gender, lemma = morph.analyze(term)
+    tense = morph.verb_concept(term) if pos == "verb" else None
+    return (lemma or term.strip().lower()), pos, gender, tense
+
+
+def _already_have(italian):
     conn = db.connect()
     try:
         row = conn.execute(
-            "SELECT 1 FROM vocab WHERE lower(term) = lower(?)", (term,)
-        ).fetchone()
+            "SELECT 1 FROM vocab WHERE lower(term)=lower(?) OR lower(lemma)=lower(?)",
+            (italian, italian)).fetchone()
         return row is not None
     finally:
         conn.close()
 
 
-def _save_vocab(term, gloss, context, anki_id):
-    from . import morph
-    pos, gender, lemma = morph.analyze(term)
+def _save_vocab(italian, english, pos, gender, tense, context, anki_id):
     conn = db.connect()
     try:
         conn.execute(
             "INSERT INTO vocab(term, gloss, source_context, status, "
-            "anki_note_id, added_from, pos, gender, lemma) "
-            "VALUES (?, ?, ?, 'new', ?, 'capture', ?, ?, ?)",
-            (term, gloss, context, anki_id, pos, gender, lemma),
+            "anki_note_id, added_from, pos, gender, lemma, features) "
+            "VALUES (?, ?, ?, 'new', ?, 'capture', ?, ?, ?, ?)",
+            (italian, english, context, anki_id, pos, gender, italian, tense),
         )
         conn.commit()
     finally:
@@ -161,22 +190,33 @@ def _save_vocab(term, gloss, context, anki_id):
 
 
 def capture_pipeline(text, notify=False):
-    """Run the full pipeline on already-captured text. Returns a summary dict.
-
-    notify=True shows a translation popup (real capture only; tests pass False
-    so no GUI fires)."""
+    """Capture -> chunk -> canonicalise (un-conjugate) -> dedupe -> translate ->
+    save a card (FRONT = Italian, BACK = English). Works whether the selection
+    is Italian or the user's native language. notify=True shows a popup (real
+    capture only; tests pass False)."""
     text = (text or "").strip()
     if not text:
         return {"captured": "", "added": [], "skipped": [], "note": "empty selection"}
 
-    terms = [t for t in chunk(text) if not _already_have(t)]
-    added, skipped = [], []
+    native = _looks_english(text)
+    added, skipped, seen = [], [], set()
     anki_up = anki.is_available()
-    for term in terms:
-        gloss = translate(term)
-        note_id = anki.add_card(term, gloss) if anki_up else None
-        _save_vocab(term, gloss, text, note_id)
-        (added if note_id or not anki_up else skipped).append(term)
+    for term in chunk(text):
+        if native:                          # user highlighted English -> get Italian
+            italian = translate(term, target="it")
+            if not italian:
+                continue                    # need the reverse shortcut; skip quietly
+            it_form, pos, gender, tense = _canonical(italian)
+            english = term
+        else:
+            it_form, pos, gender, tense = _canonical(term)
+            english = translate(it_form, target="en")
+        if it_form.lower() in seen or _already_have(it_form):
+            continue
+        seen.add(it_form.lower())
+        note_id = anki.add_card(it_form, english) if anki_up else None   # front=IT, back=EN
+        _save_vocab(it_form, english, pos, gender, tense, text, note_id)
+        (added if note_id or not anki_up else skipped).append(it_form)
     if notify and db.get_setting("show_popup", "1") == "1":
         _show_translation_popup(text)
     return {

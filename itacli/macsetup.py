@@ -366,10 +366,15 @@ def run_setup(out=print, input_fn=input, open_apps=None):
            "  1. In Shortcuts, click '+' (new shortcut). Name it exactly:",
            "        %s" % tname,
            "  2. Search actions for 'Translate Text'; add it.",
-           "  3. Set it Italian > English; click the text field, pick 'Shortcut Input'.",
-           "  4. Open the (i) tab; set 'Receive' to 'Text'.",
-           "  5. Run it once (type 'ciao') while online to download the model.",
-           "  Then check it worked:  itacli test-translate ciao"],
+           "  3. Set it to translate from Italian to English.",
+           "  4. Right-click (control-click / two-finger click) the text box in",
+           "     that action and choose 'Shortcut Input' - that's the word",
+           "     itacli hands to it.",
+           "  5. Click the settings button (sliders icon, top of the shortcut)",
+           "     and set 'Receive' to 'Text' - this lets itacli pass the word in.",
+           "  6. Save it. The first time it runs while online, macOS downloads",
+           "     the Italian model once; after that it works offline.",
+           "  Check it worked:  itacli test-translate ciao"],
           lambda: _open_app("Shortcuts"))
 
     out("")
