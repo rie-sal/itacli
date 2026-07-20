@@ -156,21 +156,21 @@ def _load_spacy():
     return _SPACY
 
 
-# A few very common English words - used only to guess if the SELECTION is in
-# the user's native language (so we can translate the other way).
-_EN_COMMON = set((
-    "the of and to a in is it you that he was for on are with as his they be at "
-    "this from or by but not what all we when can there an which do how if").split())
-
-
-def _looks_english(text):
-    from . import sources
-    words = [w.strip(".,;:!?\"'()[]").lower() for w in text.split()]
-    words = [w for w in words if w.isalpha()]
-    if not words:
+def _is_native(text):
+    """True if the selection is the user's NATIVE (non-Italian) language, so we
+    translate the other way. Uses py3langid, with an Italian-function-word
+    override for short strings it gets wrong."""
+    t = (text or "").strip()
+    if not t:
         return False
-    en = sum(1 for w in words if w in _EN_COMMON) / len(words)
-    return en > sources.italian_ratio(text) and en > 0.1
+    from . import sources
+    if sources.italian_ratio(t) >= 0.2:          # clearly Italian function words
+        return False
+    try:
+        import py3langid as langid
+        return langid.classify(t)[0] != "it"
+    except Exception:
+        return False                              # unsure -> treat as Italian
 
 
 def _canonical(term, context=None):
@@ -227,13 +227,13 @@ def capture_pipeline(text, notify=False):
     if not text:
         return {"captured": "", "added": [], "skipped": [], "note": "empty selection"}
 
-    native = _looks_english(text)
+    native = _is_native(text)
     added, skipped, seen = [], [], set()
     anki_up = anki.is_available()
-    for term in chunk(text):
+    for term in chunk(text)[:8]:            # cap translate calls (each ~1s) for speed
         if native:                          # user highlighted their language -> Italian
             italian = translate(term)
-            if not italian or _looks_english(italian):
+            if not italian or _is_native(italian):
                 continue                    # shortcut isn't bidirectional; skip quietly
             it_form, pos, gender, tense = _canonical(italian)
             english = term
@@ -303,7 +303,19 @@ def listen():
     print(" terminal: System Settings > Privacy & Security > Accessibility.)\n")
     _log("listen started for %s" % hotkey)
 
+    import time
+    kbd = keyboard.Controller()
+
     def on_fire():
+        # The hotkey's modifiers (Cmd/Shift/...) are still held here; release them
+        # so the ⌘C we send actually copies the SELECTION (not a stale clipboard).
+        for k in (keyboard.Key.cmd, keyboard.Key.shift, keyboard.Key.alt,
+                  keyboard.Key.ctrl, keyboard.Key.cmd_r, keyboard.Key.shift_r):
+            try:
+                kbd.release(k)
+            except Exception:
+                pass
+        time.sleep(0.15)
         print("  ... hotkey! capturing", flush=True)
         capture_once()
 

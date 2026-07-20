@@ -155,6 +155,19 @@ def main(argv=None):
             ok, msg = ankisetup.install_ankiconnect()
             print(msg)
             return
+        if cmd == "install-agent":
+            from . import launchagent
+            p = launchagent.install()
+            print("Background capture agent installed and started: %s" % p)
+            print("It runs at login - no terminal needed. Grant Accessibility to")
+            print("the Python process if macOS prompts (or in System Settings >")
+            print("Privacy & Security > Accessibility).")
+            return
+        if cmd == "uninstall-agent":
+            from . import launchagent
+            launchagent.uninstall()
+            print("Background capture agent removed.")
+            return
         if cmd == "anki-check":
             from . import anki, sync
             if anki.is_available():
