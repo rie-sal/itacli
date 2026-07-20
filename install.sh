@@ -9,7 +9,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip >/dev/null
 
 echo "==> Installing spaCy + mlconjug3 (this pulls numpy/scikit-learn; a few min)"
-.venv/bin/python -m pip install spacy mlconjug3
+.venv/bin/python -m pip install spacy mlconjug3 pynput
 # mlconjug3's bundled model was pickled with scikit-learn 1.6.x; pin so it loads.
 .venv/bin/python -m pip install 'scikit-learn==1.6.1'
 

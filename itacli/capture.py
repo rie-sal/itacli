@@ -45,11 +45,32 @@ def _run(cmd, text_in=None):
 
 def read_selection():
     """Copy the current selection (⌘C) and return the clipboard text (macOS)."""
-    _run(["osascript", "-e",
-          'tell application "System Events" to keystroke "c" using command down'])
-    # brief settle for the copy to land; avoid time.sleep loops per harness rules
+    import time
+    before = _run(["pbpaste"])
+    before = before.stdout if before and before.returncode == 0 else ""
+    r = _run(["osascript", "-e",
+              'tell application "System Events" to keystroke "c" using command down'])
+    if r is None or r.returncode != 0:      # osascript blocked -> Accessibility off
+        _log("read_selection: osascript keystroke FAILED (Accessibility not granted?)")
+    time.sleep(0.25)                        # let the copy land before reading
     res = _run(["pbpaste"])
-    return (res.stdout if res and res.returncode == 0 else "").strip()
+    text = (res.stdout if res and res.returncode == 0 else "").strip()
+    if text and text == before.strip():
+        _log("read_selection: clipboard unchanged after Cmd-C (nothing selected?)")
+    return text
+
+
+def _log(msg):
+    """Append a line to the capture log so hotkey issues are debuggable."""
+    import datetime
+    try:
+        from . import paths
+        stamp = datetime.datetime.now().isoformat(timespec="seconds")
+        with open(os.path.join(paths.get_data_dir(), "capture.log"), "a",
+                  encoding="utf-8") as f:
+            f.write("%s  %s\n" % (stamp, msg))
+    except OSError:
+        pass
 
 
 _shortcuts_cache = None
@@ -254,28 +275,44 @@ def _show_translation_popup(text):
 
 def capture_once():
     """One capture cycle (entry point for `run.py capture` / an OS binding)."""
+    _log("capture fired")
     text = read_selection()
     result = capture_pipeline(text, notify=True)
+    _log("captured=%r added=%s anki=%s" % (result.get("captured", "")[:60],
+                                           result.get("added"), result.get("anki")))
     _report(result)
 
 
 def listen():
-    """Global-hotkey daemon on the shortcut from Settings (needs pynput)."""
+    """Global-hotkey daemon on the shortcut from Settings (needs pynput). This is
+    a TRUE global hotkey (apps can't override it, unlike a Services shortcut)."""
     hotkey = db.get_setting("capture_hotkey", "<cmd>+<shift>+i")
     try:
         from pynput import keyboard
     except ImportError:
-        print("The hotkey daemon needs pynput:  pip install pynput")
-        print("Or bind `python3 run.py capture` to a key with Raycast/skhd.")
+        print("The hotkey daemon needs pynput:  .venv/bin/python -m pip install pynput")
         return
-    print("itacli capture is listening for %s  (Ctrl-C to stop)" % hotkey)
-    print("Grant Accessibility permission to your terminal if prompted.")
+    try:
+        from . import hotkeys
+        pretty = hotkeys.human(hotkey)
+    except Exception:
+        pretty = hotkey
+    print("\nitacli is listening for  %s  - select text anywhere and press it." % pretty)
+    print("Keep this window open. Press Ctrl-C to stop.")
+    print("(If nothing happens on press, macOS needs Accessibility for THIS")
+    print(" terminal: System Settings > Privacy & Security > Accessibility.)\n")
+    _log("listen started for %s" % hotkey)
 
     def on_fire():
-        _report(capture_pipeline(read_selection(), notify=True))
+        print("  ... hotkey! capturing", flush=True)
+        capture_once()
 
-    with keyboard.GlobalHotKeys({hotkey: on_fire}) as h:
-        h.join()
+    try:
+        with keyboard.GlobalHotKeys({hotkey: on_fire}) as h:
+            h.join()
+    except Exception as e:
+        print("Hotkey listener error: %s" % e)
+        _log("listen error: %s" % e)
 
 
 def _report(result):

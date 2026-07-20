@@ -320,6 +320,13 @@ def run_setup(out=print, input_fn=input, open_apps=None):
         out("Done: installed your capture Quick Action into ~/Library/Services.")
     except Exception as e:
         out("(Couldn't auto-install the Quick Action: %s - not fatal.)" % e)
+    out("")
+    out("IMPORTANT: a Services hotkey is low-priority - apps that already use")
+    out("your combo will swallow it, so it may 'do nothing'. If that happens,")
+    out("the reliable alternative is a true global hotkey: run")
+    out("    itacli listen")
+    out("in a terminal (keep it open). It can't be overridden by apps.")
+    out("")
     out("Three quick steps. Press [?] on any step for a plain-English walk-through.")
 
     acc_apps = _accessibility_apps()

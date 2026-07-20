@@ -309,4 +309,21 @@ places a generative model is permitted.
     - CEFR cadence threshold (study-hours between assessments).
     - Listening evaluation structure.
     - Default daily time budget and how the adaptive ratio is computed.
+
+15. TODO / BACKLOG
+------------------------------------------------------------------------------
+    - BUILD OUT THE GRAMMAR CONCEPT CATALOG (concepts.py) into a comprehensive,
+      CEFR-mapped syllabus for full Italian grammatical mastery. Current ~14
+      concepts are a starter; add partitives, articulated prepositions, all
+      compound/remote tenses, clitic pronoun combos, reflexive/pronominal verbs,
+      si impersonale/passivante, relative pronouns, full comparatives/
+      superlatives, periodo ipotetico, gerund/participle uses, etc. Reference a
+      published CEFR grammar syllabus (e.g. Profilo della lingua italiana). Add
+      generators (templates.py) + verb-tense mappings (morph.VERB_TENSE) as
+      needed so each new concept is drillable.
+    - Capture reliability: Services hotkey is low-priority (apps override it);
+      `itacli listen` (pynput) is the reliable global hotkey. Consider a proper
+      always-on daemon / launch agent later.
+    - Morph-it! lexicon for 100% verb un-conjugation coverage (unconjugate.py
+      currently covers a common-verb list).
 ==============================================================================
