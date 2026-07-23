@@ -21,14 +21,57 @@ def grammar():
 
 
 def vocabulary():
-    ui.panel("Vocabulary (Anki)", [
-        "All cards live in Anki. The app pushes cards and reads review",
-        "stats back. Quick-add without a GUI:  add \"magari\" \"maybe / if only\"",
-        "The global hotkey captures a word from any app, chunks the",
-        "sentence, dedupes, and smart-saves the relevant cards.",
-        "",
-        "Build step 3: Anki bridge + beta Proficiency score.",
-    ])
+    from . import db, anki, sync
+    while True:
+        conn = db.connect()
+        try:
+            total = conn.execute("SELECT COUNT(*) FROM vocab").fetchone()[0]
+            synced = conn.execute(
+                "SELECT COUNT(*) FROM vocab WHERE anki_note_id IS NOT NULL").fetchone()[0]
+            pending = conn.execute(
+                "SELECT term, gloss FROM vocab WHERE anki_note_id IS NULL "
+                "ORDER BY id DESC").fetchall()
+        finally:
+            conn.close()
+        up = anki.is_available()
+        ui.clear()
+        ui.blank()
+        ui.line("Vocabulary (Anki)")
+        ui.blank()
+        ui.rule()
+        ui.blank()
+        ui.two_sided("Words saved", str(total))
+        ui.two_sided("Already in Anki", str(synced))
+        ui.two_sided("Waiting for Anki", str(len(pending)))
+        ui.two_sided("Anki", "connected" if up else "offline - open it to sync")
+        ui.blank()
+        if pending:
+            ui.line("These are saved on your Mac and sync automatically once")
+            ui.line("Anki is open (they are never lost):")
+            ui.blank()
+            for term, gloss in pending[:18]:
+                ui.line("  %-18s %s" % (term, (gloss or "")[:45]))
+            if len(pending) > 18:
+                ui.line("  ...and %d more" % (len(pending) - 18))
+        else:
+            ui.line("All caught up - every saved word is in Anki.")
+        ui.blank()
+        ui.rule()
+        ui.line("[s] sync now   [q] back")
+        ui.blank()
+        try:
+            c = input(ui.INDENT + "> ").strip().lower()
+        except EOFError:
+            return
+        if c in ("q", ""):
+            return
+        if c == "s":
+            n = sync.flush()
+            ui.line("  synced %d card(s)." % n if up else "  Anki is closed - open it first.")
+            try:
+                input(ui.INDENT + "  press Enter ")
+            except EOFError:
+                return
 
 
 def listening():
@@ -106,6 +149,53 @@ def progress():
         input(ui.INDENT + "  press Enter ")
     except EOFError:
         return
+
+
+_SAFE_HOTKEYS = ["ctrl+alt+cmd+space", "ctrl+alt+cmd+c", "ctrl+alt+cmd+i",
+                 "ctrl+alt+cmd+z", "ctrl+alt+space", "ctrl+alt+c"]
+
+
+def _hotkey_picker(db, hotkeys):
+    """Suggest hotkeys mainstream apps rarely touch (Hyper combos), so the user
+    doesn't trial-and-error into an app's shortcut."""
+    ui.clear()
+    ui.blank()
+    ui.line("Choose your capture hotkey")
+    ui.blank()
+    ui.rule()
+    ui.blank()
+    ui.line("With itacli's background listener, ANY combo fires it. These are")
+    ui.line("suggested because browsers/WhatsApp/Discord rarely use them:")
+    ui.blank()
+    valid = []
+    for combo in _SAFE_HOTKEYS:
+        ok, res = hotkeys.validate(combo)
+        if ok:
+            valid.append(res)
+            ui.line("  %d   %s" % (len(valid), hotkeys.human(res)))
+    ui.blank()
+    ui.line("Pick a number, or type your own (e.g. cmd+shift+j), Enter to keep.")
+    ui.blank()
+    ui.rule()
+    ui.blank()
+    try:
+        raw = input(ui.INDENT + "> ").strip()
+    except EOFError:
+        return
+    if not raw:
+        return
+    if raw.isdigit() and 1 <= int(raw) <= len(valid):
+        db.set_setting("capture_hotkey", valid[int(raw) - 1])
+        return
+    ok, res = hotkeys.validate(raw)
+    if ok:
+        db.set_setting("capture_hotkey", res)
+    else:
+        ui.line("  " + res)
+        try:
+            input(ui.INDENT + "  press Enter ")
+        except EOFError:
+            pass
 
 
 def _users_screen():
@@ -186,18 +276,7 @@ def settings():
         if choice in ("q", ""):
             return
         if choice == "1":
-            while True:
-                try:
-                    raw = input(ui.INDENT + "Hotkey (e.g. cmd+shift+i, blank to keep): ").strip()
-                except EOFError:
-                    break
-                if not raw:
-                    break
-                ok, res = hotkeys.validate(raw)
-                if ok:
-                    db.set_setting("capture_hotkey", res)
-                    break
-                ui.line("  " + res)
+            _hotkey_picker(db, hotkeys)
         elif choice == "5":
             if _users_screen():
                 return          # switched profile - reload menu fresh

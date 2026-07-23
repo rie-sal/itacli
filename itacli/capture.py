@@ -88,30 +88,32 @@ def _installed_shortcuts():
     return _shortcuts_cache
 
 
-def translate(text):
-    """Translate via Apple's on-device translation (one macOS Shortcut).
+def translate(text, target="en"):
+    """Translate `text` into `target` ('en' or 'it').
 
-    ONE shortcut handles both directions: if you build it to detect the input
-    language and translate Italian->English else ->Italian, it flips
-    automatically. So selecting Italian gives the English gloss, and selecting
-    your native word gives the Italian. Returns "" if the shortcut isn't set up.
-    No LLM, no network.
+    Fast online first (webtranslate, both directions, auto-detect); offline it
+    falls back to the Apple 'itacli Translate' Shortcut (Italian->English only).
+    Returns "" if nothing works.
     """
-    name = db.get_setting("translate_shortcut", "")
-    if not name or name not in _installed_shortcuts():
-        return ""
-    try:
-        with tempfile.TemporaryDirectory() as d:
-            fin, fout = os.path.join(d, "in.txt"), os.path.join(d, "out.txt")
-            with open(fin, "w", encoding="utf-8") as f:
-                f.write(text)
-            res = _run(["shortcuts", "run", name,
-                        "--input-path", fin, "--output-path", fout])
-            if res and res.returncode == 0 and os.path.exists(fout):
-                with open(fout, encoding="utf-8") as f:
-                    return f.read().strip()
-    except OSError:
-        pass
+    from . import webtranslate
+    out = webtranslate.translate(text, target)
+    if out:
+        return out
+    if target == "en":                          # offline fallback (Apple, IT->EN)
+        name = db.get_setting("translate_shortcut", "")
+        if name and name in _installed_shortcuts():
+            try:
+                with tempfile.TemporaryDirectory() as d:
+                    fin, fout = os.path.join(d, "in.txt"), os.path.join(d, "out.txt")
+                    with open(fin, "w", encoding="utf-8") as f:
+                        f.write(text)
+                    res = _run(["shortcuts", "run", name,
+                                "--input-path", fin, "--output-path", fout])
+                    if res and res.returncode == 0 and os.path.exists(fout):
+                        with open(fout, encoding="utf-8") as f:
+                            return f.read().strip()
+            except OSError:
+                pass
     return ""
 
 
@@ -227,27 +229,35 @@ def capture_pipeline(text, notify=False):
     if not text:
         return {"captured": "", "added": [], "skipped": [], "note": "empty selection"}
 
-    native = _is_native(text)
+    from . import webtranslate
+    # one fast call: translate the whole selection + learn its language
+    full_en, src = webtranslate.translate_detect(text, "en")
+    native = (src != "it") if src else _is_native(text)   # web detect, else offline guess
+
+    terms = chunk(text)[:8]
+    if native:                              # native words -> Italian (one batch call)
+        italians = webtranslate.translate_many(terms, "it")
+        cards = [_canonical(it) + (word,)   # (it_form, pos, gender, tense, english)
+                 for word, it in zip(terms, italians) if it]
+    else:                                   # Italian -> canonicalise, then batch gloss
+        canon = [_canonical(t, text) for t in terms]
+        glosses = webtranslate.translate_many([c[0] for c in canon], "en")
+        cards = [c + (g,) for c, g in zip(canon, glosses)]
+
     added, skipped, seen = [], [], set()
     anki_up = anki.is_available()
-    for term in chunk(text)[:8]:            # cap translate calls (each ~1s) for speed
-        if native:                          # user highlighted their language -> Italian
-            italian = translate(term)
-            if not italian or _is_native(italian):
-                continue                    # shortcut isn't bidirectional; skip quietly
-            it_form, pos, gender, tense = _canonical(italian)
-            english = term
-        else:
-            it_form, pos, gender, tense = _canonical(term, text)   # context!
-            english = translate(it_form)
-        if it_form.lower() in seen or _already_have(it_form):
+    for it_form, pos, gender, tense, english in cards:
+        if not it_form or it_form.lower() in seen or _already_have(it_form):
             continue
         seen.add(it_form.lower())
         note_id = anki.add_card(it_form, english) if anki_up else None   # front=IT, back=EN
         _save_vocab(it_form, english, pos, gender, tense, text, note_id)
         (added if note_id or not anki_up else skipped).append(it_form)
+    if anki_up:                             # (2/3) drain the backlog now Anki is up
+        from . import sync
+        sync.flush()
     if notify and db.get_setting("show_popup", "1") == "1":
-        _show_translation_popup(text)
+        _show_translation_popup(text, full_en)
     return {
         "captured": text,
         "added": added,
@@ -257,20 +267,22 @@ def capture_pipeline(text, notify=False):
 
 
 def _notify(title, message):
-    """Show a floating macOS dialog (auto-dismisses) with the translation."""
+    """Show the native-looking floating panel; fall back to an osascript dialog."""
+    from . import popover
+    if popover.show(message):
+        return
     t = message.replace('"', "'")
-    ti = title.replace('"', "'")
     _run(["osascript", "-e",
-          'display dialog "%s" with title "%s" buttons {"OK"} '
-          'default button "OK" giving up after 8 with icon note' % (t, ti)])
+          'display dialog "%s" with title "itacli" buttons {"OK"} '
+          'default button "OK" giving up after 8 with icon note' % t])
 
 
-def _show_translation_popup(text):
-    """The 'translate popup': show the selection's translation (Apple engine)."""
-    trans = translate(text)
+def _show_translation_popup(text, full_translation=None):
+    """The translate popup: show the selection's translation near the cursor."""
+    trans = full_translation or translate(text)
     if trans:
         snippet = text if len(text) <= 40 else text[:37] + "..."
-        _notify("itacli · translation", "%s → %s" % (snippet, trans))
+        _notify("itacli", "%s  →  %s" % (snippet, trans))
 
 
 def capture_once():
