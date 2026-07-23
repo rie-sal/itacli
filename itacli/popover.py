@@ -25,15 +25,15 @@ def _binary():
         return None
 
 
-def show(message):
-    """Show the floating panel with `message`. Non-blocking. True if shown."""
-    if sys.platform != "darwin" or not message:
+def show(source, translation):
+    """Show the floating panel (source above translation). Non-blocking."""
+    if sys.platform != "darwin" or not translation:
         return False
     b = _binary()
     if not b:
         return False
     try:
-        subprocess.Popen([b, message], stdout=subprocess.DEVNULL,
+        subprocess.Popen([b, source, translation], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
         return True
     except (OSError, subprocess.SubprocessError):

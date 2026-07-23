@@ -90,8 +90,13 @@ def _present_tense(item):
 _CONCEPT_LABEL = {
     "present-tense": "Present tense", "passato-prossimo": "Passato prossimo",
     "imperfetto": "Imperfetto", "futuro": "Future tense",
+    "passato-remoto": "Passato remoto", "trapassato-prossimo": "Trapassato prossimo",
+    "futuro-anteriore": "Futuro anteriore",
     "congiuntivo": "Congiuntivo (present)",
-    "congiuntivo-imperfetto": "Congiuntivo imperfetto", "conditional": "Conditional",
+    "congiuntivo-imperfetto": "Congiuntivo imperfetto",
+    "congiuntivo-passato": "Congiuntivo passato",
+    "congiuntivo-trapassato": "Congiuntivo trapassato",
+    "conditional": "Conditional", "condizionale-passato": "Condizionale passato",
 }
 
 

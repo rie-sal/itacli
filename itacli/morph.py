@@ -155,9 +155,15 @@ VERB_TENSE = {
     "passato-prossimo": ("Indicativo", "Indicativo passato prossimo"),
     "imperfetto": ("Indicativo", "Indicativo imperfetto"),
     "futuro": ("Indicativo", "Indicativo futuro semplice"),
+    "passato-remoto": ("Indicativo", "Indicativo passato remoto"),
+    "trapassato-prossimo": ("Indicativo", "Indicativo trapassato prossimo"),
+    "futuro-anteriore": ("Indicativo", "Indicativo futuro anteriore"),
     "congiuntivo": ("Congiuntivo", "Congiuntivo presente"),
     "congiuntivo-imperfetto": ("Congiuntivo", "Congiuntivo imperfetto"),
+    "congiuntivo-passato": ("Congiuntivo", "Congiuntivo passato"),
+    "congiuntivo-trapassato": ("Congiuntivo", "Congiuntivo trapassato"),
     "conditional": ("Condizionale", "Condizionale presente"),
+    "condizionale-passato": ("Condizionale", "Condizionale passato"),
 }
 
 

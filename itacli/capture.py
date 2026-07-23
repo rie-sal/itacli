@@ -266,23 +266,20 @@ def capture_pipeline(text, notify=False):
     }
 
 
-def _notify(title, message):
-    """Show the native-looking floating panel; fall back to an osascript dialog."""
-    from . import popover
-    if popover.show(message):
+def _show_translation_popup(text, full_translation=None):
+    """The translate popup: source above translation, in a floating panel near
+    the cursor; osascript dialog as fallback."""
+    trans = full_translation or translate(text)
+    if not trans:
         return
-    t = message.replace('"', "'")
+    source = text if len(text) <= 60 else text[:57] + "..."
+    from . import popover
+    if popover.show(source, trans):
+        return
     _run(["osascript", "-e",
           'display dialog "%s" with title "itacli" buttons {"OK"} '
-          'default button "OK" giving up after 8 with icon note' % t])
-
-
-def _show_translation_popup(text, full_translation=None):
-    """The translate popup: show the selection's translation near the cursor."""
-    trans = full_translation or translate(text)
-    if trans:
-        snippet = text if len(text) <= 40 else text[:37] + "..."
-        _notify("itacli", "%s  →  %s" % (snippet, trans))
+          'default button "OK" giving up after 8 with icon note'
+          % ("%s  ->  %s" % (source, trans)).replace('"', "'")])
 
 
 def capture_once():
